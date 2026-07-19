@@ -38,7 +38,8 @@ struct AutosensGenerator {
         tempTargets: [TempTarget],
         maxDeviations: Int,
         clock: Date,
-        includeDeviationsForTesting: Bool = false
+        includeDeviationsForTesting: Bool = false,
+        precomputedTreatments: [ComputedPumpHistoryEvent]? = nil
     ) throws -> Autosens {
         // from prepare/autosens.js
         guard glucose.count >= 72 else {
@@ -47,7 +48,7 @@ struct AutosensGenerator {
 
         let lastSiteChange = determineLastSiteChange(pumpHistory: pumpHistory, profile: profile, clock: clock)
 
-        let treatments = try IobHistory.calcTempTreatments(
+        let treatments = try precomputedTreatments ?? IobHistory.calcTempTreatments(
             history: pumpHistory.map { $0.computedEvent() },
             profile: profile,
             clock: clock,

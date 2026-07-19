@@ -41,8 +41,30 @@ struct MealCob {
         mealDate: Date,
         carbImpactDate: Date?
     ) throws -> CobResult {
+        try detectCarbAbsorption(
+            clock: &clock,
+            glucose: glucose,
+            computedHistory: pumpHistory.map { $0.computedEvent() },
+            basalProfile: basalProfile,
+            profile: &profile,
+            mealDate: mealDate,
+            carbImpactDate: carbImpactDate
+        )
+    }
+
+    /// Variant for callers that already mapped the pump history; the treatments
+    /// themselves must be rebuilt per call because clock/profile mutate between calls
+    static func detectCarbAbsorption(
+        clock: inout Date, // Made inout to match JS mutation bug
+        glucose: [BloodGlucose],
+        computedHistory: [ComputedPumpHistoryEvent],
+        basalProfile: [BasalProfileEntry],
+        profile: inout Profile, // Made inout to match JS mutation bug
+        mealDate: Date,
+        carbImpactDate: Date?
+    ) throws -> CobResult {
         let treatments = try IobHistory.calcTempTreatments(
-            history: pumpHistory.map { $0.computedEvent() },
+            history: computedHistory,
             profile: profile,
             clock: clock,
             autosens: nil,
