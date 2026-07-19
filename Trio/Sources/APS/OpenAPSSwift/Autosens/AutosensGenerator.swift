@@ -66,6 +66,8 @@ struct AutosensGenerator {
         // schedules are loop-invariant; nil isfProfile still throws inside the loop
         let isfSchedule = profile.isfProfile.map(Isf.PreparedSchedule.init)
         let basalSchedule = Basal.PreparedSchedule(basalProfile)
+        // built on first iteration so the dia-missing throw keeps its timing
+        var preparedIob: IobCalculation.PreparedIobInputs?
         // in JS the simulation loop starts at index 3 but checks for i-1 (prev)
         // and i-3 (old) values for computations
         for (oldGlucose, (prevGlucose, currGlucose)) in zip(
@@ -88,7 +90,9 @@ struct AutosensGenerator {
             var simulationProfile = profile
             simulationProfile.currentBasal = try basalSchedule.rate(at: currGlucose.date)
             simulationProfile.temptargetSet = false
-            let iob = try IobCalculation.iobTotal(treatments: treatments, profile: simulationProfile, time: currGlucose.date)
+            let prepared = try preparedIob ?? IobCalculation.prepare(treatments: treatments, profile: simulationProfile)
+            preparedIob = prepared
+            let iob = try IobCalculation.iobTotal(prepared: prepared, profile: simulationProfile, time: currGlucose.date)
 
             // copying Javascript rounding
             let bgi = (-iob.activity * sensitivity * 5 * 100 + 0.5).rounded(scale: 0, roundingMode: .down) / 100

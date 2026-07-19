@@ -199,6 +199,8 @@ struct MealCob {
         // schedules are loop-invariant; nil isfProfile still throws inside the loop
         let isfSchedule = profile.isfProfile.map(Isf.PreparedSchedule.init)
         let basalSchedule = Basal.PreparedSchedule(basalProfile)
+        // built on first iteration so the dia-missing throw keeps its timing
+        var preparedIob: IobCalculation.PreparedIobInputs?
 
         // Process bucketed data (excluding last 3 entries)
         for i in 0 ..< max(0, bucketedData.count - 3) {
@@ -224,8 +226,10 @@ struct MealCob {
             profile.currentBasal = try basalSchedule.rate(at: bgTime) // Mutates the profile
 
             // Calculate IOB with mutated values
+            let prepared = try preparedIob ?? IobCalculation.prepare(treatments: treatments, profile: profile)
+            preparedIob = prepared
             let iob = try IobCalculation.iobTotal(
-                treatments: treatments,
+                prepared: prepared,
                 profile: profile,
                 time: clock // Uses the mutated clock
             )
