@@ -80,6 +80,45 @@ enum IobCalculation {
         return Decimal((value * multiplier + 0.5).rounded(.down) / multiplier)
     }
 
+    /// Exponential-curve constants; invariant across treatments and time points for a fixed profile.
+    /// c0/c1/c2 store the identical left-associated subexpressions of `iobCalc`, so
+    /// substituting them yields bit-identical IEEE-754 results.
+    struct CurveConstants {
+        let end: Double
+        let tau: Double
+        let c0: Double // S / pow(tau, 2)
+        let c1: Double // S * (1 - a)
+        let c2: Double // tau * end * (1 - a)
+    }
+
+    /// Only valid for exponential curves; `lookupPeak` cannot throw for them
+    static func curveConstants(dia: Decimal, profile: Profile) throws -> CurveConstants {
+        let peak = try lookupPeak(from: profile)
+        let end = Double(dia) * 60
+        let tau = peak * (1 - peak / end) / (1 - 2 * peak / end)
+        let a = 2 * tau / end
+        let S = 1 / (1 - a + (1 + a) * exp(-end / tau))
+        return CurveConstants(end: end, tau: tau, c0: S / pow(tau, 2), c1: S * (1 - a), c2: tau * end * (1 - a))
+    }
+
+    /// Same math as `iobCalc` with the loop-invariant constants substituted
+    private static func contributions(insulin: Double, minsAgo: Double, constants: CurveConstants) -> IobCalculationResult {
+        guard minsAgo < constants.end else {
+            return IobCalculationResult(activityContrib: 0, iobContrib: 0)
+        }
+
+        let decay = exp(-minsAgo / constants.tau)
+        let activityContrib = insulin * constants.c0 * minsAgo * (1 - minsAgo / constants.end) * decay
+        let iobContrib = insulin *
+            (1 - constants.c1 * ((pow(minsAgo, 2) / constants.c2 - minsAgo / constants.tau - 1) * decay + 1))
+
+        guard activityContrib.isFinite, iobContrib.isFinite else {
+            return IobCalculationResult(activityContrib: 0, iobContrib: 0)
+        }
+
+        return IobCalculationResult(activityContrib: activityContrib, iobContrib: iobContrib)
+    }
+
     static func iobTotal(treatments: [ComputedPumpHistoryEvent], profile: Profile, time now: Date) throws -> IobTotal {
         guard var dia = profile.dia else {
             throw IobError.diaNotSet
@@ -98,11 +137,26 @@ enum IobCalculation {
 
         let diaAgo = now - Double(dia * 60 * 60) // convert to seconds
         let treatments = treatments.filter({ $0.timestamp <= now && $0.timestamp > diaAgo })
+        // bilinear keeps the per-treatment path so its throw behavior is unchanged
+        let constants = profile.curve == .bilinear ? nil : try curveConstants(dia: dia, profile: profile)
         for treatment in treatments {
-            guard let tIOB = try iobCalc(treatment: treatment, time: now, dia: dia, profile: profile),
-                  let insulin = treatment.insulin.map({ Double($0) })
-            else {
-                continue
+            let tIOB: IobCalculationResult
+            let insulin: Double
+            if let constants {
+                guard let insulinValue = treatment.insulin.map({ Double($0) }) else {
+                    continue
+                }
+                let minsAgo = (now.timeIntervalSince(treatment.timestamp) / 60.0).rounded()
+                insulin = insulinValue
+                tIOB = contributions(insulin: insulinValue, minsAgo: minsAgo, constants: constants)
+            } else {
+                guard let calculated = try iobCalc(treatment: treatment, time: now, dia: dia, profile: profile),
+                      let insulinValue = treatment.insulin.map({ Double($0) })
+                else {
+                    continue
+                }
+                insulin = insulinValue
+                tIOB = calculated
             }
             iob += tIOB.iobContrib
             activity += tIOB.activityContrib
