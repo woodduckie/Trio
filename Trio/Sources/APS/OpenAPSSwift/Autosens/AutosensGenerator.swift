@@ -63,6 +63,9 @@ struct AutosensGenerator {
         var state = SimulationState(meals: meals)
         var deviations: [Decimal] = []
         var debugInfoList: [Autosens.DebugInfo] = []
+        // schedules are loop-invariant; nil isfProfile still throws inside the loop
+        let isfSchedule = profile.isfProfile.map(Isf.PreparedSchedule.init)
+        let basalSchedule = Basal.PreparedSchedule(basalProfile)
         // in JS the simulation loop starts at index 3 but checks for i-1 (prev)
         // and i-3 (old) values for computations
         for (oldGlucose, (prevGlucose, currGlucose)) in zip(
@@ -73,17 +76,17 @@ struct AutosensGenerator {
                 continue
             }
 
-            guard let isfProfile = profile.isfProfile?.toInsulinSensitivities() else {
+            guard let isfSchedule else {
                 throw AutosensError.missingIsfProfile
             }
-            let (sensitivity, _) = try Isf.isfLookup(isfDataInput: isfProfile, timestamp: currGlucose.date)
+            let sensitivity = try isfSchedule.sensitivity(at: currGlucose.date)
             // in JS the isfLookup function returns -1 on errors
             guard sensitivity > 0 else {
                 throw AutosensError.isfLookupError
             }
             let deltaGlucose = currGlucose.glucose - prevGlucose.glucose
             var simulationProfile = profile
-            simulationProfile.currentBasal = try Basal.basalLookup(basalProfile, now: currGlucose.date)
+            simulationProfile.currentBasal = try basalSchedule.rate(at: currGlucose.date)
             simulationProfile.temptargetSet = false
             let iob = try IobCalculation.iobTotal(treatments: treatments, profile: simulationProfile, time: currGlucose.date)
 

@@ -196,6 +196,10 @@ struct MealCob {
         var minDeviation: Decimal = 999
         var allDeviations: [Decimal] = []
 
+        // schedules are loop-invariant; nil isfProfile still throws inside the loop
+        let isfSchedule = profile.isfProfile.map(Isf.PreparedSchedule.init)
+        let basalSchedule = Basal.PreparedSchedule(basalProfile)
+
         // Process bucketed data (excluding last 3 entries)
         for i in 0 ..< max(0, bucketedData.count - 3) {
             let bgTime = bucketedData[i].date
@@ -210,14 +214,14 @@ struct MealCob {
             let delta = bg - bucketedData[i + 1].glucose
 
             // Get ISF
-            guard let isfProfile = profile.isfProfile?.toInsulinSensitivities() else {
+            guard let isfSchedule else {
                 throw CobError.missingIsfProfile
             }
-            let (sens, _) = try Isf.isfLookup(isfDataInput: isfProfile, timestamp: bgTime)
+            let sens = try isfSchedule.sensitivity(at: bgTime)
 
             // JS BUGS: These mutations persist!
             clock = bgTime // Mutates the clock
-            profile.currentBasal = try Basal.basalLookup(basalProfile, now: bgTime) // Mutates the profile
+            profile.currentBasal = try basalSchedule.rate(at: bgTime) // Mutates the profile
 
             // Calculate IOB with mutated values
             let iob = try IobCalculation.iobTotal(

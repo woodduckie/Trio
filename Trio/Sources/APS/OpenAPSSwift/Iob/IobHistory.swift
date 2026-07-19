@@ -402,7 +402,8 @@ struct IobHistory {
     private static func extractTempBoluses(
         from tempBasal: ComputedPumpHistoryEvent,
         profile: Profile,
-        autosens: Autosens?
+        autosens: Autosens?,
+        basalSchedule: Basal.PreparedSchedule
     ) throws -> [ComputedPumpHistoryEvent] {
         guard let duration = tempBasal.duration, duration > 0 else {
             return []
@@ -412,9 +413,7 @@ struct IobHistory {
             throw IobError.rateNotSetOnTempBasal(timestamp: tempBasal.timestamp)
         }
 
-        guard let profileCurrentRate = try Basal.basalLookup(profile.basalprofile ?? [], now: tempBasal.timestamp) ?? profile
-            .currentBasal
-        else {
+        guard let profileCurrentRate = try basalSchedule.rate(at: tempBasal.timestamp) ?? profile.currentBasal else {
             throw IobError.basalRateNotSet
         }
 
@@ -448,8 +447,9 @@ struct IobHistory {
         let profileBreaksMinutesSinceMidnight = profile.basalprofile?.map({ Decimal($0.minutes) }) ?? []
         let splitTempBasals = try tempHistory
             .flatMap { try splitTempBasal(tempBasal: $0, profileBreaks: profileBreaksMinutesSinceMidnight) }
+        let basalSchedule = Basal.PreparedSchedule(profile.basalprofile ?? [])
         return try splitTempBasals
-            .flatMap { try extractTempBoluses(from: $0, profile: profile, autosens: autosens) }
+            .flatMap { try extractTempBoluses(from: $0, profile: profile, autosens: autosens, basalSchedule: basalSchedule) }
     }
 
     static func calcTempTreatments(
