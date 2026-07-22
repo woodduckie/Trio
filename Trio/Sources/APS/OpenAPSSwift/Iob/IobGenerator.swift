@@ -9,14 +9,7 @@ struct IobGenerator {
     ) throws -> [IobResult] {
         let pumpHistory = history.map { $0.computedEvent() }
 
-        let treatments = try IobHistory.calcTempTreatments(
-            history: pumpHistory,
-            profile: profile,
-            clock: clock,
-            autosens: autosens,
-            zeroTempDuration: nil
-        )
-        let treatmentsWithZeroTemp = try IobHistory.calcTempTreatments(
+        let (treatments, treatmentsWithZeroTemp) = try IobHistory.calcTempTreatmentsPair(
             history: pumpHistory,
             profile: profile,
             clock: clock,
