@@ -47,7 +47,7 @@ enum MainChartHelper {
         /// Visible x-axis window seeded on first launch of the chart (matches the old 6 h default).
         static let defaultVisibleSeconds: TimeInterval = 6 * 3600
         /// Tightest pinch-in zoom.
-        static let minVisibleSeconds: TimeInterval = 3 * 3600
+        static let minVisibleSeconds: TimeInterval = 1 * 3600
         /// Widest pinch-out zoom.
         static let maxVisibleSeconds: TimeInterval = 24 * 3600
         /// Double-tap cycles the visible window through these presets.
