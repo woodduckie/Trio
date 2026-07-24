@@ -457,14 +457,20 @@ extension MainChartView {
         return min(max(proposed, earliest), max(earliest, latest))
     }
 
-    /// Anchors the visible window just past `state.endMarker`.
+    /// Anchors the visible window so the current reading stays on-screen at any zoom.
     private func scrollToTrailingEdge() {
         // Never yank the chart out from under an active gesture (pan, pinch, or an
         // in-progress inspect/scrub); the next data tick after the gesture ends will
         // re-anchor to trailing as before.
         guard !isPinching, panBaseline == nil, !isInspectLatched else { return }
         momentumTask?.cancel()
-        scrollPosition = state.endMarker.addingTimeInterval(trailingOverscan - visibleSeconds)
+        // Wide zoom keeps the forecast-anchored framing; tighter zoom (where anchoring to
+        // endMarker pushed `now` off the left) re-anchors to `now` plus a proportional peek.
+        let forecastAnchoredTrailing = state.endMarker.addingTimeInterval(trailingOverscan)
+        let nowAnchoredTrailing = Date.now
+            .addingTimeInterval(visibleSeconds * MainChartHelper.Config.followForecastPeekFraction)
+        let trailingEdge = min(forecastAnchoredTrailing, nowAnchoredTrailing)
+        scrollPosition = clampedLeadingEdge(trailingEdge.addingTimeInterval(-visibleSeconds))
     }
 
     /// One-finger gesture: movement pans (with momentum on release); a press held in
