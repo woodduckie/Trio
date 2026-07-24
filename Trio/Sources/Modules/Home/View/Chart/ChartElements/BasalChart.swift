@@ -58,7 +58,9 @@ extension MainChartCanvas {
 
 extension MainChartCanvas {
     func drawTempBasals() -> some ChartContent {
-        ForEach(preparedTempBasals, id: \.rate) { basal in
+        // only bars overlapping the render window; the rest clip invisibly but still cost layout
+        let visible = preparedTempBasals.filter { $0.end >= windowStart && $0.start <= windowEnd }
+        return ForEach(visible, id: \.start) { basal in
             RectangleMark(
                 xStart: .value("start", basal.start),
                 xEnd: .value("end", basal.end),
@@ -85,7 +87,8 @@ extension MainChartCanvas {
 
     func drawBasalProfile() -> some ChartContent {
         /// dashed profile line
-        ForEach(basalProfiles, id: \.self) { profile in
+        let visible = basalProfiles.filter { ($0.endDate ?? state.endMarker) >= windowStart && $0.startDate <= windowEnd }
+        return ForEach(visible, id: \.self) { profile in
             LineMark(
                 x: .value("Start Date", profile.startDate),
                 y: .value("Amount", invertedY(profile.amount)),
@@ -99,36 +102,42 @@ extension MainChartCanvas {
         }
     }
 
-    func drawSuspensions() -> some ChartContent {
+    /// Suspend→resume intervals resolved once, so the mark loop does no per-mark lookups.
+    private func suspensionIntervals() -> [(start: Date, end: Date, height: Double)] {
         let suspensions = state.suspendAndResumeEvents
-        return ForEach(suspensions) { suspension in
-            let now = Date()
+        let now = Date()
+        var intervals = [(start: Date, end: Date, height: Double)]()
 
-            if let type = suspension.type, type == EventType.pumpSuspend.rawValue, let suspensionStart = suspension.timestamp {
-                let suspensionEnd = min(
-                    (
-                        suspensions
-                            .first(where: {
-                                $0.timestamp ?? now > suspensionStart && $0.type == EventType.pumpResume.rawValue })?
-                            .timestamp
-                    ) ?? now,
-                    now
-                )
-
-                let basalProfileDuringSuspension = basalProfiles.first(where: { $0.startDate <= suspensionStart })
-                // Clamp to the explicit y-domain: the fallback height of 1 U/hr can exceed
-                // `basalDomainMax` when no profile data is available, and unlike the old
-                // auto-scaled (flipped) plot, an explicit domain would clip the mark.
-                let suspensionMarkHeight = min(basalProfileDuringSuspension?.amount ?? 1, basalDomainMax)
-
-                RectangleMark(
-                    xStart: .value("start", suspensionStart),
-                    xEnd: .value("end", suspensionEnd),
-                    yStart: .value("suspend-start", basalDomainMax),
-                    yEnd: .value("suspend-end", invertedY(suspensionMarkHeight))
-                )
-                .foregroundStyle(Color.loopGray.opacity(colorScheme == .dark ? 0.3 : 0.8))
+        for suspension in suspensions {
+            guard suspension.type == EventType.pumpSuspend.rawValue, let suspensionStart = suspension.timestamp else {
+                continue
             }
+            let suspensionEnd = min(
+                suspensions.first(where: {
+                    $0.timestamp ?? now > suspensionStart && $0.type == EventType.pumpResume.rawValue
+                })?.timestamp ?? now,
+                now
+            )
+            let basalProfileDuringSuspension = basalProfiles.first(where: { $0.startDate <= suspensionStart })
+            // Clamp to the explicit y-domain: the fallback height of 1 U/hr can exceed
+            // `basalDomainMax` when no profile data is available, and unlike the old
+            // auto-scaled (flipped) plot, an explicit domain would clip the mark.
+            let height = min(basalProfileDuringSuspension?.amount ?? 1, basalDomainMax)
+            intervals.append((suspensionStart, suspensionEnd, height))
+        }
+        return intervals
+    }
+
+    func drawSuspensions() -> some ChartContent {
+        let visible = suspensionIntervals().filter { $0.end >= windowStart && $0.start <= windowEnd }
+        return ForEach(visible, id: \.start) { interval in
+            RectangleMark(
+                xStart: .value("start", interval.start),
+                xEnd: .value("end", interval.end),
+                yStart: .value("suspend-start", basalDomainMax),
+                yEnd: .value("suspend-end", invertedY(interval.height))
+            )
+            .foregroundStyle(Color.loopGray.opacity(colorScheme == .dark ? 0.3 : 0.8))
         }
     }
 }

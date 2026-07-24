@@ -866,7 +866,14 @@ struct MainChartCanvas: View {
 
 extension MainChartCanvas {
     var mainChart: some View {
-        Chart {
+        // slice each series once per layout; these were computed properties
+        // re-evaluated on every reference (glucose alone was scanned 3x)
+        let glucose = windowedGlucose
+        let insulin = windowedInsulin
+        let carbs = windowedCarbs
+        let fpus = windowedFPUs
+
+        return Chart {
             drawCurrentTimeMarker()
             drawThresholdLines()
 
@@ -890,7 +897,7 @@ extension MainChartCanvas {
             )
 
             GlucoseChartView(
-                glucoseData: windowedGlucose,
+                glucoseData: glucose,
                 units: state.units,
                 highGlucose: state.highGlucose,
                 lowGlucose: state.lowGlucose,
@@ -900,17 +907,17 @@ extension MainChartCanvas {
             )
 
             InsulinView(
-                glucoseData: windowedGlucose,
-                insulinData: windowedInsulin,
+                glucoseData: glucose,
+                insulinData: insulin,
                 units: state.units,
                 bolusDisplayThreshold: state.bolusDisplayThreshold
             )
 
             CarbView(
-                glucoseData: windowedGlucose,
+                glucoseData: glucose,
                 units: state.units,
-                carbData: windowedCarbs,
-                fpuData: windowedFPUs,
+                carbData: carbs,
+                fpuData: fpus,
                 minValue: units == .mgdL ? state.minYAxisValue : state.minYAxisValue
                     .asMmolL
             )

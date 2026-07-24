@@ -8,10 +8,6 @@ extension MainChartCanvas {
             drawCurrentTimeMarker()
             drawCOBIOBChart()
         }
-        .chartForegroundStyleScale([
-            "COB": Color.orange,
-            "IOB": Color.darkerBlue
-        ])
         .chartLegend(.hidden)
         .frame(width: canvasWidth, height: cobIobHeight)
         .chartXScale(domain: windowStart ... windowEnd)
@@ -54,12 +50,12 @@ extension MainChartCanvas {
             let amountCOB = Int(item.cob)
             let date: Date = item.deliverAt ?? Date()
 
-            LineMark(x: .value("Time", date), y: .value("Value", amountCOB))
-                .foregroundStyle(by: .value("Type", "COB"))
-                .position(by: .value("Axis", "COB"))
-            AreaMark(x: .value("Time", date), y: .value("Value", amountCOB))
-                .foregroundStyle(by: .value("Type", "COB"))
-                .position(by: .value("Axis", "COB"))
+            // Fixed styles + explicit series identity replace foregroundStyle(by:)/
+            // position(by:), which dragged every mark through scale resolution.
+            LineMark(x: .value("Time", date), y: .value("Value", amountCOB), series: .value("Series", "COB"))
+                .foregroundStyle(Color.orange)
+            AreaMark(x: .value("Time", date), y: .value("Value", amountCOB), series: .value("Series", "COB"))
+                .foregroundStyle(Color.orange)
                 .opacity(0.2)
 
             // MARK: - IOB line and area mark
@@ -67,13 +63,11 @@ extension MainChartCanvas {
             let rawAmount = item.iob?.doubleValue ?? 0
             let amountIOB: Double = MainChartHelper.scaledIobAmount(rawAmount)
 
-            AreaMark(x: .value("Time", date), y: .value("Amount", amountIOB))
-                .foregroundStyle(by: .value("Type", "IOB"))
-                .position(by: .value("Axis", "IOB"))
+            AreaMark(x: .value("Time", date), y: .value("Amount", amountIOB), series: .value("Series", "IOB"))
+                .foregroundStyle(Color.darkerBlue)
                 .opacity(0.2)
-            LineMark(x: .value("Time", date), y: .value("Amount", amountIOB))
-                .foregroundStyle(by: .value("Type", "IOB"))
-                .position(by: .value("Axis", "IOB"))
+            LineMark(x: .value("Time", date), y: .value("Amount", amountIOB), series: .value("Series", "IOB"))
+                .foregroundStyle(Color.darkerBlue)
         }
     }
 }
