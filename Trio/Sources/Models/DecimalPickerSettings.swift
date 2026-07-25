@@ -143,6 +143,16 @@ struct DecimalPickerSettings {
     )
 }
 
+extension Decimal {
+    /// Clamps the value into the range a picker allows.
+    ///
+    /// Lives here rather than with the general `Decimal` helpers so that those stay free of
+    /// UI-layer types — `PickerSetting` is declared just below.
+    func clamp(to pickerSetting: PickerSetting) -> Decimal {
+        max(min(self, pickerSetting.max), pickerSetting.min)
+    }
+}
+
 struct PickerSetting {
     var value: Decimal
     var step: Decimal
