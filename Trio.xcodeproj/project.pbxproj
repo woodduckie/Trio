@@ -216,6 +216,7 @@
 		FAB1E00000000000000000C2 /* ParityInputs.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB1E00000000000000000B2 /* ParityInputs.swift */; };
 		FAB1E00000000000000000C3 /* ParityScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB1E00000000000000000B3 /* ParityScenarios.swift */; };
 		FAB1E00000000000000000C4 /* ParityGoldenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB1E00000000000000000B4 /* ParityGoldenTests.swift */; };
+		7A11AC0DE000000000000060 /* WallClockParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A11AC0DE000000000000160 /* WallClockParityTests.swift */; };
 		FAB1E00000000000000000C5 /* ParityPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB1E00000000000000000B5 /* ParityPerformanceTests.swift */; };
 		3B2F77862D7E52ED005ED9FA /* TDD.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B2F77852D7E52ED005ED9FA /* TDD.swift */; };
 		3B2F77882D7E5387005ED9FA /* CurrentTDDSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B2F77872D7E5387005ED9FA /* CurrentTDDSetup.swift */; };
@@ -1263,6 +1264,7 @@
 		FAB1E00000000000000000B2 /* ParityInputs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityInputs.swift; sourceTree = "<group>"; };
 		FAB1E00000000000000000B3 /* ParityScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityScenarios.swift; sourceTree = "<group>"; };
 		FAB1E00000000000000000B4 /* ParityGoldenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityGoldenTests.swift; sourceTree = "<group>"; };
+		7A11AC0DE000000000000160 /* WallClockParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallClockParityTests.swift; sourceTree = "<group>"; };
 		FAB1E00000000000000000B5 /* ParityPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParityPerformanceTests.swift; sourceTree = "<group>"; };
 		3B2F77852D7E52ED005ED9FA /* TDD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TDD.swift; sourceTree = "<group>"; };
 		3B2F77872D7E5387005ED9FA /* CurrentTDDSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentTDDSetup.swift; sourceTree = "<group>"; };
@@ -3215,6 +3217,7 @@
 				FAB1E00000000000000000B2 /* ParityInputs.swift */,
 				FAB1E00000000000000000B3 /* ParityScenarios.swift */,
 				FAB1E00000000000000000B4 /* ParityGoldenTests.swift */,
+				7A11AC0DE000000000000160 /* WallClockParityTests.swift */,
 				FAB1E00000000000000000B5 /* ParityPerformanceTests.swift */,
 			);
 			path = Parity;
@@ -5730,6 +5733,7 @@
 				FAB1E00000000000000000C2 /* ParityInputs.swift in Sources */,
 				FAB1E00000000000000000C3 /* ParityScenarios.swift in Sources */,
 				FAB1E00000000000000000C4 /* ParityGoldenTests.swift in Sources */,
+				7A11AC0DE000000000000060 /* WallClockParityTests.swift in Sources */,
 				FAB1E00000000000000000C5 /* ParityPerformanceTests.swift in Sources */,
 				3B1C5C482D68E269004E9273 /* IobHistoryTests.swift in Sources */,
 				38FCF3F925E902C20078B0D1 /* FileStorageTests.swift in Sources */,

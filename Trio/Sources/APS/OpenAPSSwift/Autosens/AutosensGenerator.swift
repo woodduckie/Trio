@@ -258,9 +258,9 @@ struct AutosensGenerator {
 
     /// Returns true if the time is within first 5 minutes of an even hour based on local timezone
     private static func everyOtherHourOnTheHour(glucoseDate: Date) -> Bool {
-        let calendar = Calendar.current
-        let minutes = calendar.component(.minute, from: glucoseDate)
-        let hours = calendar.component(.hour, from: glucoseDate)
+        guard let minutesSinceMidnight = glucoseDate.minutesSinceMidnight else { return false }
+        let minutes = minutesSinceMidnight % 60
+        let hours = minutesSinceMidnight / 60
 
         if minutes >= 0, minutes < 5 {
             if hours % 2 == 0 {
