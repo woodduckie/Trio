@@ -47,7 +47,7 @@ let algorithmHelpers = [
 let package = Package(
     name: "TrioAlgorithm",
     defaultLocalization: "en",
-    platforms: [.iOS(.v17), .macOS(.v14)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "Trio", targets: ["Trio"])
     ],
