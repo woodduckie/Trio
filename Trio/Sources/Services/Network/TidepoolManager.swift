@@ -440,7 +440,7 @@ extension BaseTidepoolManager {
                         return result
                     }
 
-                    debug(.service, "TIDEPOOL DOSE ENTRIES: \(insulinDoseEvents)")
+                    debug(.service, "Uploading \(insulinDoseEvents.count) dose entries to Tidepool")
 
                     let pumpEvents: [PersistedPumpEvent] = events.compactMap { event -> PersistedPumpEvent? in
                         if let pumpEventType = event.type.mapEventTypeToPumpEventType() {
@@ -493,8 +493,7 @@ extension BaseTidepoolManager {
             switch pumpResult {
             case .success:
                 debug(.service, "Success synchronizing pump events data. Upload to Tidepool complete.")
-                let pumpEventType = events.map { $0.type.mapEventTypeToPumpEventType() }
-                let pumpEventsToMark = events.filter { _ in pumpEventType.contains(pumpEventType) }
+                let pumpEventsToMark = events.filter { $0.type.mapEventTypeToPumpEventType() != nil }
                 await updateInsulinAsUploaded(pumpEventsToMark)
             case let .failure(error):
                 debug(.service, "Error synchronizing pump events data: \(String(describing: error))")

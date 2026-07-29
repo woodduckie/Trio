@@ -100,7 +100,15 @@ actor TidepoolUploadSerializer {
     }
 
     private func begin(_ pipeline: TidepoolUploadPipeline, generation: Int) -> Bool {
-        guard isCurrent(generation) else { return false }
+        guard isCurrent(generation) else {
+            if !pipeline.coalesces {
+                warning(
+                    .service,
+                    "Tidepool '\(pipeline.rawValue)' upload dropped: chain abandoned before it started; payload is not retried"
+                )
+            }
+            return false
+        }
         waiting.remove(pipeline)
         headPipeline = pipeline
         headStart = Date()
