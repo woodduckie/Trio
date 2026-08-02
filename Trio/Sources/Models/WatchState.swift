@@ -57,8 +57,15 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
             lhs.maxFat == rhs.maxFat &&
             lhs.maxProtein == rhs.maxProtein &&
             lhs.bolusIncrement == rhs.bolusIncrement &&
-            lhs.confirmBolusFaster == rhs.confirmBolusFaster
+            lhs.confirmBolusFaster == rhs.confirmBolusFaster &&
+            lhs.showForecast == rhs.showForecast &&
+            lhs.isForecastCone == rhs.isForecastCone &&
+            lhs.forecastStartDate == rhs.forecastStartDate &&
+            lhs.forecastConeMin == rhs.forecastConeMin &&
+            lhs.forecastConeMax == rhs.forecastConeMax &&
+            lhs.forecastLines == rhs.forecastLines
     }
+
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(date)
