@@ -117217,6 +117217,9 @@
         }
       }
     },
+    "Enable this feature to show the forecast on the Apple Watch" : {
+
+    },
     "Enable UAM" : {
       "comment" : "Enable UAM",
       "localizations" : {
@@ -244552,6 +244555,9 @@
         }
       }
     },
+    "Show forcast on Watch" : {
+
+    },
     "Show Future" : {
       "localizations" : {
         "bg" : {
@@ -245931,6 +245937,9 @@
           }
         }
       }
+    },
+    "Shows Forecast on the Apple Watch" : {
+
     },
     "Shows the COB value calculated by the algorithm at a specific time in the past. These values are snapshots and won’t change if carbs are added or removed after the fact." : {
       "localizations" : {
