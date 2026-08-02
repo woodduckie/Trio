@@ -36,44 +36,39 @@ struct GarminWatchState: Hashable, Equatable, Sendable, Encodable {
     /// Unit hint for the watchface ("mgdl" or "mmol")
     var units_hint: String?
 
-    /// Insulin on board as a decimal value (only in first array entry)
+    /// Insulin on board as a decimal value
     var iob: Double?
 
-    /// Current temp basal rate in U/hr (only in first array entry)
+    /// Current temp basal rate in U/hr
     var tbr: Double?
 
-    /// Carbs on board as a decimal value (only in first array entry)
+    /// Carbs on board as a decimal value
     var cob: Double?
 
-    /// Predicted eventual blood glucose (excluded if data type 2 is set to TBR)
+    /// Predicted eventual blood glucose
     var eventualBG: Int16?
 
     /// Current insulin sensitivity factor as an integer (only in first array entry)
     var isf: Int16?
 
-    /// AutoISF sensitivity ratio (included only if data type 1 is set to sensRatio)
+    /// Sensitivity ratio 
     var sensRatio: Double?
 
     // MARK: - Display Configuration Fields
 
-    /// Specifies which primary attribute to display
+    /// Primary attribute to display
     /// Options: "cob", "isf", or "sensRatio"
     var displayPrimaryAttributeChoice: String?
 
-    /// Specifies which secondary attribute to display
+    /// secondary attribute to display
     /// Options: "tbr" or "eventualBG"
     var displaySecondaryAttributeChoice: String?
 
-    /// Glucose color scheme configured on the phone: "dynamic" or "static".
-    /// Watch apps that can draw the hue ramp use it to pick the palette; the short
-    /// form is sent rather than the `GlucoseColorScheme` raw value because that is
-    /// what the watchface reads. Optional extension key: receivers that don't know
-    /// it ignore it and keep their own coloring.
+    /// Trio color scheme for BG curve currently used
+    /// Options: "dynamic" or "static"
     var glucoseColorScheme: String?
 
-    /// Scheduled glucose target in raw mg/dL (no unit conversion applied), the green
-    /// midpoint of the dynamic hue ramp. Profile target only, matching the Home
-    /// chart — it does not follow overrides or temp targets.
+    /// Scheduled Profile target currently active
     var targetGlucose: Int16?
 
     static func == (lhs: GarminWatchState, rhs: GarminWatchState) -> Bool {

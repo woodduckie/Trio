@@ -561,10 +561,8 @@ final class BaseGarminManager: NSObject, GarminManager, Injectable {
 
         let tempBasalIds = try await fetchTempBasals()
 
-        // Glucose target for watch apps that color glucose on a hue ramp. Read fresh on
-        // every build rather than cached, so a target profile edit is picked up here.
         // Scheduled profile target only, matching the Home chart -- overrides and temp
-        // targets are not reflected (see nightscout/Trio#1357).
+        // targets are not reflected.
         let bgTargets = await fileStorage.retrieveAsync(OpenAPS.Settings.bgTargets, as: BGTargets.self)
             ?? BGTargets(from: OpenAPS.defaults(for: OpenAPS.Settings.bgTargets))
             ?? BGTargets(units: .mgdL, userPreferredUnits: .mgdL, targets: [])
@@ -1142,10 +1140,7 @@ extension BaseGarminManager: SettingsObserver {
 }
 
 extension BaseGarminManager: BGTargetsObserver {
-    /// Called when the glucose target profile is edited. Targets live in their own JSON
-    /// store rather than in TrioSettings, so this is the only notification for them.
-    /// The new target is read inside `setupGarminWatchState`; this just prompts a rebuild
-    /// so the watch does not wait for the next glucose reading to see it.
+    /// Called when the glucose target profile is edited.
     /// - Parameter _: The updated targets, re-read from storage during preparation.
     func bgTargetsDidChange(_: BGTargets) {
         if debugWatchState {
