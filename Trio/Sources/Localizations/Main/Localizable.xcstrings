@@ -117232,6 +117232,9 @@
         }
       }
     },
+    "Enable this feature to show the forecast on the Apple Watch" : {
+
+    },
     "Enable UAM" : {
       "comment" : "Enable UAM",
       "localizations" : {
@@ -242048,7 +242051,7 @@
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inställd till ett glukosvärde, t.ex. 160 (mg/dl = 8,9 mmol/l), vilket innebär att när det temporära målvärdet är 8,9 mmol/l och 'motinsläge' är på, används endast en 50%-ig basal vid detta blodglukosvärde (120 = 75%; 140 = 60%). Detta kan justeras, för att ge dig mer kontroll över dina temporära målvärden vid träning."
+            "value" : "Inställd till ett glukosvärde, t.ex. 160 (mg/dl = 8,9 mmol/l), vilket innebär att när det temporära målvärdet är 8,9 mmol/l och 'motinsläge' är på, används endast en 50%%-ig basal vid detta blodglukosvärde (120 = 75%; 140 = 60%). Detta kan justeras, för att ge dig mer kontroll över dina temporära målvärden vid träning."
           }
         },
         "tr" : {
@@ -244581,6 +244584,9 @@
         }
       }
     },
+    "Show forcast on Watch" : {
+
+    },
     "Show Future" : {
       "localizations" : {
         "bg" : {
@@ -245960,6 +245966,9 @@
           }
         }
       }
+    },
+    "Shows Forecast on the Apple Watch" : {
+
     },
     "Shows the COB value calculated by the algorithm at a specific time in the past. These values are snapshots and won’t change if carbs are added or removed after the fact." : {
       "localizations" : {
