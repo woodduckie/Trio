@@ -15,6 +15,7 @@ enum CalendarError: LocalizedError, Equatable {
 }
 
 /// Calendar-free local time; UTC offset cached between DST transitions.
+/// Deliberate exception: the algorithm is meant to stay stateless — this offset cache is the one piece of state we allow.
 enum WallClock {
     private struct Interval {
         let start: TimeInterval
