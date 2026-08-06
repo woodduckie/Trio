@@ -1,3 +1,4 @@
+import AccuChekKit
 import CGMBLEKit
 import EversenseKit
 import Foundation
@@ -53,6 +54,11 @@ class BasePluginManager: Injectable, PluginManager {
             pluginIdentifier: LibreLoopCGMManager.pluginIdentifier,
             localizedTitle: String(localized: "FreeStyle Libre 3 / 3+"),
             manager: LibreLoopCGMManager.self
+        ),
+        CgmPluginDescription(
+            pluginIdentifier: AccuChekCgmManager.pluginIdentifier,
+            localizedTitle: String(localized: "Accu-Chek SmartGuide"),
+            manager: AccuChekCgmManager.self
         )
     ]
 
