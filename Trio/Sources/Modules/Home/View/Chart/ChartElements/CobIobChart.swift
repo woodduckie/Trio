@@ -7,6 +7,7 @@ extension MainChartCanvas {
         Chart {
             drawCurrentTimeMarker()
             drawCOBIOBChart()
+            drawIobProjection()
         }
         .chartLegend(.hidden)
         .frame(width: canvasWidth, height: cobIobHeight)
@@ -78,6 +79,33 @@ extension MainChartCanvas {
             .opacity(0.2)
             LineMark(x: .value("Time", date), y: .value("Amount", amountIOB), series: .value("Series", "IOB"))
                 .foregroundStyle(Color.darkerBlue)
+        }
+    }
+
+    // MARK: - Projected IOB decay (dashed, from latest determination into the future)
+
+    func drawIobProjection() -> some ChartContent {
+        // stale projections (older than the newest determination) render nothing
+        let anchor = state.enactedAndNonEnactedDeterminations.first?.deliverAt ?? state.timerDate
+
+        return ForEach(state.iobProjection.filter { $0.date >= anchor && $0.date <= windowEnd }) { point in
+            let amount = MainChartHelper.scaledIobAmount(point.iob)
+
+            AreaMark(
+                x: .value("Time", point.date),
+                y: .value("Amount", amount),
+                series: .value("Series", "IOBProjection"),
+                stacking: .unstacked
+            )
+            .foregroundStyle(Color.darkerBlue)
+            .opacity(0.1)
+            LineMark(
+                x: .value("Time", point.date),
+                y: .value("Amount", amount),
+                series: .value("Series", "IOBProjection")
+            )
+            .foregroundStyle(Color.darkerBlue.opacity(0.8))
+            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
         }
     }
 }
