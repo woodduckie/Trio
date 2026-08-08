@@ -2,7 +2,7 @@ import CoreData
 import Foundation
 
 /// A single historical amount (bolus units or carb grams) used to build Quick-Pick Treatment suggestions.
-private struct QuickPickSample {
+struct QuickPickSample {
     let amount: Decimal
     let timestamp: Date
 }
@@ -10,7 +10,7 @@ private struct QuickPickSample {
 /// Scores samples by recency, time-of-day, and weekday/weekend similarity to "now", then returns the
 /// rounded amounts with the highest scores. Shared by the bolus and carb Quick-Pick Treatment suggestion
 /// loaders so the two amount types are ranked with identical logic.
-private func topQuickPickSuggestions(
+func topQuickPickSuggestions(
     from samples: [QuickPickSample],
     roundingScale: Int,
     now: Date,
