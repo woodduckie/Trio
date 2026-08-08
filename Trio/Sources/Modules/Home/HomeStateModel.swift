@@ -33,7 +33,9 @@ extension Home {
 
         private let timer = DispatchTimer(timeInterval: 30)
         private(set) var filteredHours = 24
-        var startMarker = Date(timeIntervalSinceNow: TimeInterval(hours: -24))
+        var startMarker = Date(timeIntervalSinceNow: -MainChartHelper.Config.chartHistorySeconds)
+        /// Span of history the chart arrays are fetched over; grows once to
+        /// `maxChartHistorySeconds` when the user pans near the domain start.
         var endMarker = Date(timeIntervalSinceNow: TimeInterval(hours: 3))
         var manualGlucose: [BloodGlucose] = []
         var uploadStats = false
@@ -155,7 +157,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var glucoseController: NSFetchedResultsController<GlucoseStored> = {
             let request = NSFetchRequest<GlucoseStored>(entityName: "GlucoseStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \GlucoseStored.date, ascending: true)]
-            request.predicate = NSPredicate.glucose
+            request.predicate = NSPredicate.glucose(since: chartHistoryStartDate)
             request.fetchBatchSize = 50
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
@@ -171,7 +173,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var carbsController: NSFetchedResultsController<CarbEntryStored> = {
             let request = NSFetchRequest<CarbEntryStored>(entityName: "CarbEntryStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \CarbEntryStored.date, ascending: false)]
-            request.predicate = NSPredicate.carbsForChart
+            request.predicate = NSPredicate.carbsForChart(since: chartHistoryStartDate)
             request.fetchBatchSize = 5
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
@@ -187,7 +189,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var fpuController: NSFetchedResultsController<CarbEntryStored> = {
             let request = NSFetchRequest<CarbEntryStored>(entityName: "CarbEntryStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \CarbEntryStored.date, ascending: false)]
-            request.predicate = NSPredicate.fpusForChart
+            request.predicate = NSPredicate.fpusForChart(since: chartHistoryStartDate)
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
                 managedObjectContext: viewContext,
@@ -219,7 +221,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var determinationController: NSFetchedResultsController<OrefDetermination> = {
             let request = NSFetchRequest<OrefDetermination>(entityName: "OrefDetermination")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \OrefDetermination.deliverAt, ascending: false)]
-            request.predicate = NSPredicate.determinationsForCobIobCharts
+            request.predicate = NSPredicate.determinationsForCobIobCharts(since: chartHistoryStartDate)
             request.fetchBatchSize = 50
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
@@ -235,7 +237,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var insulinController: NSFetchedResultsController<PumpEventStored> = {
             let request = NSFetchRequest<PumpEventStored>(entityName: "PumpEventStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \PumpEventStored.timestamp, ascending: true)]
-            request.predicate = NSPredicate.pumpHistoryLast24h
+            request.predicate = NSPredicate.pumpHistory(since: chartHistoryStartDate)
             request.fetchBatchSize = 30
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
@@ -282,7 +284,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var overrideRunController: NSFetchedResultsController<OverrideRunStored> = {
             let request = NSFetchRequest<OverrideRunStored>(entityName: "OverrideRunStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \OverrideRunStored.startDate, ascending: false)]
-            request.predicate = NSPredicate.predicateForStartDateOneDayAgo
+            request.predicate = NSPredicate.predicateForStartDate(since: chartHistoryStartDate)
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
                 managedObjectContext: viewContext,
@@ -297,7 +299,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var tempTargetController: NSFetchedResultsController<TempTargetStored> = {
             let request = NSFetchRequest<TempTargetStored>(entityName: "TempTargetStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \TempTargetStored.date, ascending: false)]
-            request.predicate = NSPredicate.tempTargetsForMainChart
+            request.predicate = NSPredicate.tempTargetsForMainChart(since: chartHistoryStartDate)
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
                 managedObjectContext: viewContext,
@@ -312,7 +314,7 @@ extension Home {
         @ObservationIgnored private(set) lazy var tempTargetRunController: NSFetchedResultsController<TempTargetRunStored> = {
             let request = NSFetchRequest<TempTargetRunStored>(entityName: "TempTargetRunStored")
             request.sortDescriptors = [NSSortDescriptor(keyPath: \TempTargetRunStored.startDate, ascending: false)]
-            request.predicate = NSPredicate.predicateForStartDateOneDayAgo
+            request.predicate = NSPredicate.predicateForStartDate(since: chartHistoryStartDate)
             let controller = NSFetchedResultsController(
                 fetchRequest: request,
                 managedObjectContext: viewContext,
@@ -363,24 +365,27 @@ extension Home {
 
         /// Called on `willEnterForegroundNotification`; idempotent at launch.
         @MainActor func reanchorFetchWindows() {
-            reanchor(glucoseController, with: NSPredicate.glucose) {
+            reanchor(glucoseController, with: NSPredicate.glucose(since: chartHistoryStartDate)) {
                 self.updateGlucoseFromController()
                 // Re-sync the chart domain even if no new reading arrived while backgrounded.
                 self.updateStartEndMarkers()
             }
-            reanchor(carbsController, with: NSPredicate.carbsForChart) { self.updateCarbsFromController() }
-            reanchor(fpuController, with: NSPredicate.fpusForChart) { self.updateFPUsFromController() }
-            reanchor(determinationController, with: NSPredicate.determinationsForCobIobCharts) {
+            reanchor(carbsController, with: NSPredicate.carbsForChart(since: chartHistoryStartDate)) {
+                self.updateCarbsFromController() }
+            reanchor(fpuController, with: NSPredicate.fpusForChart(since: chartHistoryStartDate)) {
+                self.updateFPUsFromController() }
+            reanchor(determinationController, with: NSPredicate.determinationsForCobIobCharts(since: chartHistoryStartDate)) {
                 self.updateDeterminationsFromController()
             }
-            reanchor(insulinController, with: NSPredicate.pumpHistoryLast24h) { self.updateInsulinFromController() }
-            reanchor(overrideRunController, with: NSPredicate.predicateForStartDateOneDayAgo) {
+            reanchor(insulinController, with: NSPredicate.pumpHistory(since: chartHistoryStartDate)) {
+                self.updateInsulinFromController() }
+            reanchor(overrideRunController, with: NSPredicate.predicateForStartDate(since: chartHistoryStartDate)) {
                 self.updateOverrideRunsFromController()
             }
-            reanchor(tempTargetController, with: NSPredicate.tempTargetsForMainChart) {
+            reanchor(tempTargetController, with: NSPredicate.tempTargetsForMainChart(since: chartHistoryStartDate)) {
                 self.updateTempTargetsFromController()
             }
-            reanchor(tempTargetRunController, with: NSPredicate.predicateForStartDateOneDayAgo) {
+            reanchor(tempTargetRunController, with: NSPredicate.predicateForStartDate(since: chartHistoryStartDate)) {
                 self.updateTempTargetRunsFromController()
             }
             reanchor(batteryController, with: NSPredicate.predicateFor30MinAgo) { self.updateBatteryFromController() }
@@ -499,31 +504,36 @@ extension Home {
                     // warmup / stabilizing / expiry. Simulator has no
                     // CGMManager, so fall back to reading its synthetic
                     // lifecycle / highlight so the bobble sees the same
-                    // data shape a real CGM would deliver.
+                    // data shape a real CGM would deliver. Other non-manager
+                    // sources publish their own state through `GlucoseSource`.
                     let manager = self.fetchGlucoseManager.cgmManager
                     let source = self.fetchGlucoseManager.glucoseSource
                     let progress: DeviceLifecycleProgress?
-                    let highlight: DeviceStatusHighlight?
+                    let displayState: CgmDisplayState?
                     if let manager {
                         progress = manager.cgmLifecycleProgress
-                        highlight = manager.cgmStatusHighlight
+                        displayState = manager.cgmStatusHighlight.map {
+                            CgmDisplayState(
+                                localizedMessage: $0.localizedMessage,
+                                imageName: $0.imageName,
+                                status: CgmDisplayStatus.from($0.state)
+                            )
+                        }
                     } else if let sim = source as? GlucoseSimulatorSource {
                         progress = sim.cgmLifecycleProgress
-                        highlight = sim.cgmStatusHighlight
+                        displayState = sim.cgmStatusHighlight.map {
+                            CgmDisplayState(
+                                localizedMessage: $0.localizedMessage,
+                                imageName: $0.imageName,
+                                status: CgmDisplayStatus.from($0.state)
+                            )
+                        }
                     } else {
-                        progress = nil
-                        highlight = nil
+                        progress = source?.cgmProgressHighlight.value
+                        displayState = source?.cgmDisplayState.value
                     }
                     self.cgmProgressHighlight = progress
-                    if let highlight {
-                        self.cgmDisplayState = CgmDisplayState(
-                            localizedMessage: highlight.localizedMessage,
-                            imageName: highlight.imageName,
-                            status: CgmDisplayStatus.from(highlight.state)
-                        )
-                    } else {
-                        self.cgmDisplayState = nil
-                    }
+                    self.cgmDisplayState = displayState
                     self.cgmSensorExpiresAt = Self.resolveSensorExpiresAt(
                         manager: manager,
                         glucoseSource: source,
@@ -818,12 +828,14 @@ extension Home {
             }
         }
 
-        private func setupGlucoseTargets() async {
+        func setupGlucoseTargets() async {
             let bgTargets = await provider.getBGTargets()
             let targetProfiles = processFetchedTargets(bgTargets, startMarker: startMarker)
+            let currentTarget = bgTargets.currentTarget()
             await MainActor.run {
                 self.bgTargets = bgTargets
                 self.targetProfiles = targetProfiles
+                if let currentTarget { self.currentGlucoseTarget = currentTarget }
             }
         }
 
@@ -832,50 +844,6 @@ extension Home {
                 let reservoir = await provider.pumpReservoir()
                 await MainActor.run {
                     self.reservoir = reservoir
-                }
-            }
-        }
-
-        private func getCurrentGlucoseTarget() async {
-            let now = Date()
-            let calendar = Calendar.current
-
-            let entries: [(start: String, value: Decimal)] = bgTargets.targets.map { ($0.start, $0.low) }
-
-            for (index, entry) in entries.enumerated() {
-                guard let entryTime = TherapySettingsUtil.parseTime(entry.start) else {
-                    debug(.default, "Invalid entry start time: \(entry.start)")
-                    continue
-                }
-
-                let entryComponents = calendar.dateComponents([.hour, .minute, .second], from: entryTime)
-                let entryStartTime = calendar.date(
-                    bySettingHour: entryComponents.hour!,
-                    minute: entryComponents.minute!,
-                    second: entryComponents.second!,
-                    of: now
-                )!
-
-                let entryEndTime: Date
-                if index < entries.count - 1,
-                   let nextEntryTime = TherapySettingsUtil.parseTime(entries[index + 1].start)
-                {
-                    let nextEntryComponents = calendar.dateComponents([.hour, .minute, .second], from: nextEntryTime)
-                    entryEndTime = calendar.date(
-                        bySettingHour: nextEntryComponents.hour!,
-                        minute: nextEntryComponents.minute!,
-                        second: nextEntryComponents.second!,
-                        of: now
-                    )!
-                } else {
-                    entryEndTime = calendar.date(byAdding: .day, value: 1, to: entryStartTime)!
-                }
-
-                if now >= entryStartTime, now < entryEndTime {
-                    await MainActor.run {
-                        currentGlucoseTarget = entry.value
-                    }
-                    return
                 }
             }
         }
@@ -967,7 +935,6 @@ extension Home.StateModel:
         lowGlucose = settingsManager.settings.low
         highGlucose = settingsManager.settings.high
         Task {
-            await getCurrentGlucoseTarget()
             await setupGlucoseTargets()
         }
         eA1cDisplayUnit = settingsManager.settings.eA1cDisplayUnit
