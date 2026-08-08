@@ -13,9 +13,9 @@ private struct QuickPickSample {
 private func topQuickPickSuggestions(
     from samples: [QuickPickSample],
     roundingScale: Int,
+    now: Date,
     limit: Int = 5
 ) -> [Decimal] {
-    let now = Date()
     let cal = Calendar.current
     let nowMinute = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
     let nowDOW = cal.component(.weekday, from: now)
@@ -81,7 +81,7 @@ private func fetchQuickPickSuggestions<T: NSManagedObject>(
         return await fetchContext.perform {
             guard let entities = results as? [T] else { return [] }
             let samples = entities.compactMap(extractSample)
-            return topQuickPickSuggestions(from: samples, roundingScale: roundingScale)
+            return topQuickPickSuggestions(from: samples, roundingScale: roundingScale, now: Date())
         }
     } catch {
         debug(.default, "\(DebuggingIdentifiers.failed) failed to fetch quick-pick suggestions for \(type): \(error)")
