@@ -12,6 +12,9 @@ struct QuickPickTreatmentsView: View {
     @State private var showInfo = false
     @State private var isEnacting = false
     @State private var enactAlert: EnactAlert?
+    @State private var sheetHeight: CGFloat = 320
+
+    private static let navigationBarAllowance: CGFloat = 70
 
     private struct EnactAlert: Identifiable {
         let id = UUID()
@@ -60,13 +63,15 @@ struct QuickPickTreatmentsView: View {
                     .multilineTextAlignment(.leading)
                     .padding()
 
-                    Spacer()
-
                     slideToConfirmButton
                 }
                 .padding(.horizontal)
                 .frame(maxWidth: .infinity)
+                .fixedSize(horizontal: false, vertical: true)
                 .blur(radius: isEnacting ? 5 : 0)
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) {
+                    sheetHeight = $0 + Self.navigationBarAllowance
+                }
 
                 if isEnacting {
                     CustomProgressView(text: progressText.displayName)
@@ -116,7 +121,11 @@ struct QuickPickTreatmentsView: View {
         SlideButton(
             styling: .init(indicatorSystemName: "chevron.right.2", textAlignment: .globalCenter),
             action: { await enact() },
-            label: { Text(slideToConfirmLabel) }
+            label: {
+                Text(slideToConfirmLabel)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.5)
+            }
         )
         .disabled(selectedBolusAmount == nil && selectedCarbAmount == nil)
         .padding(.horizontal)
@@ -124,12 +133,6 @@ struct QuickPickTreatmentsView: View {
 
     private var displayedBolusSuggestions: [Decimal] { Self.displayedSuggestions(from: bolusSuggestions, limit: 3) }
     private var displayedCarbSuggestions: [Decimal] { Self.displayedSuggestions(from: carbSuggestions, limit: 3) }
-
-    /// Grows the sheet to fit however many pill rows are actually shown, rather than assuming both rows render.
-    private var sheetHeight: CGFloat {
-        let rowCount = (displayedBolusSuggestions.isEmpty ? 0 : 1) + (displayedCarbSuggestions.isEmpty ? 0 : 1)
-        return rowCount >= 2 ? 380 : 320
-    }
 
     private var bolusUnitLabel: String {
         String(localized: "U", comment: "Insulin unit abbreviation shown next to a quick-pick bolus amount")
