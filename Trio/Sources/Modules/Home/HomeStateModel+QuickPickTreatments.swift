@@ -174,8 +174,11 @@ extension Home.StateModel {
         )
         do {
             guard try await unlockmanager.unlock() else { return .failed }
-            await apsManager.enactBolus(amount: delivery, isSMB: false, callback: nil)
-            return .succeeded
+            var bolusSucceeded = false
+            await apsManager.enactBolus(amount: delivery, isSMB: false) { success, _ in
+                bolusSucceeded = success
+            }
+            return bolusSucceeded ? .succeeded : .failed
         } catch {
             debug(.bolusState, "Quick-pick treatment bolus authentication error: \(error)")
             return .failed
