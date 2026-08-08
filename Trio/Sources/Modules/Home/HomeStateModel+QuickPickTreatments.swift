@@ -117,9 +117,9 @@ extension Home.StateModel {
             sortKey: "pumpEvent.timestamp",
             roundingScale: 2
         ) { bolus in
-            guard let nsAmount = bolus.amount, nsAmount.doubleValue > 0, nsAmount.doubleValue <= maxBolusUnits,
+            guard let rawAmount = bolus.amount, rawAmount.doubleValue > 0, rawAmount.doubleValue <= maxBolusUnits,
                   let timestamp = bolus.pumpEvent?.timestamp else { return nil }
-            return QuickPickSample(amount: nsAmount as Decimal, timestamp: timestamp)
+            return QuickPickSample(amount: rawAmount as Decimal, timestamp: timestamp)
         }
     }
 
