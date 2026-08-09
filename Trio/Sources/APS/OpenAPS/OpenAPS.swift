@@ -641,6 +641,16 @@ final class OpenAPS {
         tempTargets: [TempTarget],
         clock: Date
     ) throws -> Autosens {
+        // both runs use identical inputs, so compute the treatments once;
+        // gated on the same count as the generate early return
+        let precomputedTreatments = glucose.count >= 72 ? try IobHistory.calcTempTreatments(
+            history: pumpHistory.map { $0.computedEvent() },
+            profile: profile,
+            clock: clock,
+            autosens: nil,
+            zeroTempDuration: nil
+        ) : nil
+
         // this logic is from prepare/autosens.js
         let ratio8h = try AutosensGenerator.generate(
             glucose: glucose,
@@ -650,7 +660,8 @@ final class OpenAPS {
             carbs: carbs,
             tempTargets: tempTargets,
             maxDeviations: 96,
-            clock: clock
+            clock: clock,
+            precomputedTreatments: precomputedTreatments
         )
 
         let ratio24h = try AutosensGenerator.generate(
@@ -661,7 +672,8 @@ final class OpenAPS {
             carbs: carbs,
             tempTargets: tempTargets,
             maxDeviations: 288,
-            clock: clock
+            clock: clock,
+            precomputedTreatments: precomputedTreatments
         )
 
         return ratio8h.ratio < ratio24h.ratio ? ratio8h : ratio24h
