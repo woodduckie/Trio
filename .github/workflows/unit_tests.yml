@@ -178,7 +178,13 @@ jobs:
             BuildTools/.build
           key: ${{ runner.os }}-trio-dd-${{ github.sha }}
 
+      # MallocScribble poisons freed memory so a use-after-free trips immediately
+      # rather than whenever malloc next walks a damaged free list; MallocErrorAbort
+      # turns that into a crash report with a stack instead of a limping process.
       - name: Run tests
+        env:
+          TEST_RUNNER_MallocScribble: "1"
+          TEST_RUNNER_MallocErrorAbort: "1"
         run: |
           set -o pipefail
           time xcodebuild test-without-building \
