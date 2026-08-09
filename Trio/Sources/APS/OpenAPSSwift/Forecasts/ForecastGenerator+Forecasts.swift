@@ -48,11 +48,18 @@ extension ForecastGenerator {
         startingGlucose: Decimal,
         glucoseImpactSeries: [Decimal],
         carbImpact: Decimal,
-        carbImpactParams: CarbImpactParams
+        carbImpactParams: CarbImpactParams,
+        mealCOB: Decimal,
+        carbSensitivityFactor: Decimal
     ) -> IndividualForecast {
         // Start with the current BG
         var result = [startingGlucose]
         var rawResult = [startingGlucose]
+
+        // Remaining COB per step, derived from the same carb-impact terms that
+        // bend the forecast; display-only, never fed back into the algorithm
+        var remainingCob = mealCOB
+        var cobSeries = [mealCOB]
 
         var minGuardGlucose = Decimal(999)
         // Build forecast out to glucoseImpactSeries.count (usually 48)
@@ -83,7 +90,16 @@ extension ForecastGenerator {
                 + forecastedCarbImpact
                 + triangle
 
-            if result.count < 48 { result.append(next) }
+            // grams absorbed this step = carb impact of this step / CSF
+            let absorbedCarbs = carbSensitivityFactor > 0
+                ? (forecastedCarbImpact + triangle) / carbSensitivityFactor
+                : 0
+            remainingCob = max(0, remainingCob - absorbedCarbs)
+
+            if result.count < 48 {
+                result.append(next)
+                cobSeries.append(remainingCob)
+            }
             if next < minGuardGlucose { minGuardGlucose = next.jsRounded() }
             rawResult.append(next)
         }
@@ -94,7 +110,8 @@ extension ForecastGenerator {
             forecasts: ForecastGenerator.trimFlatTails(clampedResult, lookback: 13),
             minGuardGlucose: minGuardGlucose,
             rawForecasts: rawResult,
-            duration: nil
+            duration: nil,
+            cobSeries: cobSeries
         )
     }
 

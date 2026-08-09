@@ -69,7 +69,9 @@ enum ForecastGenerator {
             startingGlucose: glucose,
             glucoseImpactSeries: glucoseImpactSeries,
             carbImpact: carbImpact,
-            carbImpactParams: carbImpactParams
+            carbImpactParams: carbImpactParams,
+            mealCOB: mealData.mealCOB,
+            carbSensitivityFactor: carbSensitivityFactor
         )
 
         let uamResult = forecastUAM(
@@ -125,8 +127,10 @@ enum ForecastGenerator {
 
         var eventualGlucose = eventualGlucose
         var finalCobForecast: [Decimal]?
+        var cobProjection: [Decimal]?
         if mealData.mealCOB > 0, carbImpact > 0 || carbImpactParams.remainingCarbImpactPeak > 0 {
             finalCobForecast = cobResult.forecasts
+            cobProjection = cobResult.cobSeries
             if let lastCobGlucose = cobResult.forecasts.last {
                 eventualGlucose = max(eventualGlucose, lastCobGlucose.jsRounded())
             }
@@ -153,7 +157,8 @@ enum ForecastGenerator {
             minGuardGlucose: blendedForecasts.minGuardGlucose,
             carbImpact: carbImpact,
             remainingCarbImpactPeak: carbImpactParams.remainingCarbImpactPeak,
-            adjustedCarbRatio: adjustedCarbRatio
+            adjustedCarbRatio: adjustedCarbRatio,
+            cobProjection: cobProjection
         )
     }
 
