@@ -188,8 +188,32 @@ jobs:
             -disableAutomaticPackageResolution \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 120 \
+            -resultBundlePath TestResults.xcresult \
             $([ "$ENABLE_PARALLEL_TESTING" = "true" ] && echo "-parallel-testing-enabled YES") \
             2>&1 | tee xcodebuild.log
+
+      # The runner has crashed mid-suite with heap corruption that does not reproduce
+      # locally under ASan or TSan. Keep the crash report so the next occurrence is
+      # diagnosable from a stack rather than from log adjacency.
+      - name: Collect crash diagnostics
+        if: failure()
+        run: |
+          mkdir -p diagnostics
+          cp -R TestResults.xcresult diagnostics/ 2>/dev/null || true
+          cp -R ~/Library/Logs/DiagnosticReports diagnostics/host-reports 2>/dev/null || true
+          find ~/Library/Developer/CoreSimulator/Devices -name "*.ips" -newermt "-2 hours" \
+            -exec cp {} diagnostics/ \; 2>/dev/null || true
+          ls -R diagnostics | head -50
+        shell: bash
+
+      - name: Upload crash diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics-${{ github.run_attempt }}
+          path: diagnostics
+          retention-days: 7
+          if-no-files-found: ignore
 
       # A skipped parity suite still exits 0, so assert it actually ran.
       - name: Assert golden parity ran
