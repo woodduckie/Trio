@@ -11,18 +11,13 @@ struct ParityError: Error {
     }
 }
 
-/// Process-wide environment pinning so golden fixtures are deterministic.
+/// The zone the goldens were recorded in. Pinned from outside the process — the scheme's
+/// TZ variable, or the CI job env — because suites run in parallel and setenv/NSTimeZone.default
+/// are process-global: mutating them mid-run races every other suite.
 enum ParityEnv {
     static let timeZoneIdentifier = "Europe/Berlin"
 
-    /// Set-once token; reference from suite init before running any pipeline.
-    static let pinned: Void = {
-        // NSTimeZone.default moves Calendar.current but not TimeZone.current, which WallClock reads
-        setenv("TZ", timeZoneIdentifier, 1)
-        tzset()
-        NSTimeZone.resetSystemTimeZone()
-        NSTimeZone.default = TimeZone(identifier: timeZoneIdentifier)!
-    }()
+    static var isPinned: Bool { TimeZone.current.identifier == timeZoneIdentifier }
 }
 
 /// Records and compares byte-exact golden fixtures for the oref-swift pipeline.
@@ -110,16 +105,5 @@ enum ParityHarness {
             return "line \(index + 1): golden `\(goldenLines[index])` vs actual `\(actualLines[index])`"
         }
         return "line count \(goldenLines.count) vs \(actualLines.count)"
-    }
-}
-
-@Suite("Parity environment", .serialized) struct ParityEnvironmentTests {
-    init() {
-        _ = ParityEnv.pinned
-    }
-
-    @Test("timezone pin propagates to TimeZone.current and Calendar.current") func timeZonePin() {
-        #expect(TimeZone.current.identifier == ParityEnv.timeZoneIdentifier)
-        #expect(Calendar.current.timeZone.identifier == ParityEnv.timeZoneIdentifier)
     }
 }

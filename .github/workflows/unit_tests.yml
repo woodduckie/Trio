@@ -33,6 +33,9 @@ jobs:
     name: Algorithm Package (swift test)
     runs-on: macos-26
     if: github.repository_owner == 'nightscout'
+    # The parity goldens were recorded in this zone and skip themselves outside it.
+    env:
+      TZ: Europe/Berlin
 
     steps:
       - name: Select Xcode version
@@ -60,7 +63,18 @@ jobs:
         run: swift --version
 
       - name: Run algorithm tests
-        run: time swift test --package-path AlgorithmPackage
+        run: |
+          set -o pipefail
+          time swift test --package-path AlgorithmPackage 2>&1 | tee swift-test.log
+
+      # A skipped parity suite still exits 0, so assert it actually ran.
+      - name: Assert golden parity ran
+        run: |
+          if grep -q 'Suite "OpenAPSSwift golden parity" skipped' swift-test.log; then
+            echo "::error title=Golden parity skipped::TZ is not Europe/Berlin in this job"
+            exit 1
+          fi
+        shell: bash
 
       - name: Save cache
         if: always() && steps.spm-cache-restore.outputs.cache-hit != 'true'
@@ -178,6 +192,15 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' \
             $([ "$ENABLE_PARALLEL_TESTING" = "true" ] && echo "-parallel-testing-enabled YES") \
             2>&1 | tee xcodebuild.log
+
+      # A skipped parity suite still exits 0, so assert it actually ran.
+      - name: Assert golden parity ran
+        run: |
+          if grep -q 'Suite "OpenAPSSwift golden parity" skipped' xcodebuild.log; then
+            echo "::error title=Golden parity skipped::TZ is not Europe/Berlin in the test runner"
+            exit 1
+          fi
+        shell: bash
 
       - name: Annotate test results
         if: always()
