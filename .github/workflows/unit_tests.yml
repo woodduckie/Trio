@@ -124,7 +124,8 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: |
-            /Users/runner/Library/Developer/Xcode/DerivedData
+            /Users/runner/Library/Developer/Xcode/DerivedData/*/Build
+            /Users/runner/Library/Developer/Xcode/DerivedData/*/SourcePackages
             .build
             BuildTools/.build
           key: ${{ runner.os }}-trio-dd-${{ github.sha }}
@@ -166,14 +167,15 @@ jobs:
           fi
         shell: bash
 
-      # Every run writes the cache. Restricting this to dev cost more than it saved:
-      # a PR's later runs then restore an ever-staler cache, and the build went 480s
-      # -> 716s across two pushes against a ~45s upload.
+      # Every run writes the cache, including PRs. `dev` is not the repo's default
+      # branch, so a PR run cannot restore dev's caches at all — its own ref is the
+      # only warm cache it will ever see.
       - name: Save cache
         uses: actions/cache/save@v5
         with:
           path: |
-            /Users/runner/Library/Developer/Xcode/DerivedData
+            /Users/runner/Library/Developer/Xcode/DerivedData/*/Build
+            /Users/runner/Library/Developer/Xcode/DerivedData/*/SourcePackages
             .build
             BuildTools/.build
           key: ${{ runner.os }}-trio-dd-${{ github.sha }}
