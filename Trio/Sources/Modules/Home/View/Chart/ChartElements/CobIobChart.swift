@@ -15,6 +15,22 @@ extension MainChartCanvas {
         .chartXAxis { basalChartXAxis }
         .chartYAxis { cobIobChartYAxis }
         .chartYScale(domain: combinedYDomain())
+        // report the pane's true plot rect: the hour labels reserve space inside
+        // the pane frame, so the plot is shorter than cobIobHeight. The overlay
+        // (chart-sized, NOT plot-sized) resolves the plot anchor and rebases it
+        // into canvas coordinates for the shell's selection dots.
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                if let plotAnchor = proxy.plotFrame {
+                    let chartFrame = geo.frame(in: .named(MainChartCanvas.coordinateSpaceName))
+                    let plotLocal = geo[plotAnchor]
+                    Color.clear.preference(
+                        key: CobIobPlotFrameKey.self,
+                        value: plotLocal.offsetBy(dx: chartFrame.minX, dy: chartFrame.minY)
+                    )
+                }
+            }
+        }
     }
 
     func combinedYDomain() -> ClosedRange<Double> {
