@@ -104,7 +104,17 @@ extension MainChartCanvas {
         // stale projections (older than the newest determination) render nothing
         let anchor = state.enactedAndNonEnactedDeterminations.first?.deliverAt ?? state.timerDate
 
-        return ForEach(state.iobProjection.filter { $0.date >= anchor && $0.date <= windowEnd }) { point in
+        var points = state.iobProjection.filter { $0.date >= anchor && $0.date <= windowEnd }
+        // the projection can be up to one cycle newer than the newest determination
+        // (iob.json is written before determineBasal); bridge the gap so the dashed
+        // curve connects to the end of the historical line
+        if let first = points.first, first.date > anchor,
+           let lastIob = state.enactedAndNonEnactedDeterminations.first?.iob?.doubleValue
+        {
+            points.insert(IobProjectionPoint(date: anchor, iob: lastIob), at: 0)
+        }
+
+        return ForEach(points) { point in
             let amount = MainChartHelper.scaledIobAmount(point.iob)
 
             AreaMark(
