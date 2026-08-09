@@ -17,6 +17,10 @@ enum ParityEnv {
 
     /// Set-once token; reference from suite init before running any pipeline.
     static let pinned: Void = {
+        // NSTimeZone.default moves Calendar.current but not TimeZone.current, which WallClock reads
+        setenv("TZ", timeZoneIdentifier, 1)
+        tzset()
+        NSTimeZone.resetSystemTimeZone()
         NSTimeZone.default = TimeZone(identifier: timeZoneIdentifier)!
     }()
 }
