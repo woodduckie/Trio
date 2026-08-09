@@ -84,7 +84,7 @@ extension Home {
             .frame(height: chartHeight)
             .overlay(alignment: .bottomTrailing) {
                 chartInfoButton
-                    .offset(x: 0, y: -10)
+                    .offset(x: 0, y: -18)
             }
             .overlay(alignment: .topTrailing) {
                 // borderless capsule (not a control); centered in the basal
