@@ -74,6 +74,7 @@ extension Home {
         var isSmoothingEnabled = false
         var maxIOB: Decimal = 0.0
         var currentIOB: Decimal = 0.0
+        var iobProjection: [IobProjectionPoint] = []
         var autosensMax: Decimal = 1.2
         var lowGlucose: Decimal = 70
         var highGlucose: Decimal = 180
@@ -472,6 +473,9 @@ extension Home {
                 .sink { [weak self] _ in
                     guard let self = self else { return }
                     self.currentIOB = self.iobService.currentIOB ?? 0
+                    self.iobProjection = self.iobService.iobProjection.compactMap { entry in
+                        entry.time.map { IobProjectionPoint(date: $0, iob: NSDecimalNumber(decimal: entry.iob).doubleValue) }
+                    }
                 }
                 .store(in: &subscriptions)
 
