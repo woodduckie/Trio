@@ -2,6 +2,15 @@ import Foundation
 import Testing
 @testable import Trio
 
+/// Local stand-in for TestError, which lives outside the directory AlgorithmPackage symlinks in.
+struct ParityError: Error {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+}
+
 /// Process-wide environment pinning so golden fixtures are deterministic.
 enum ParityEnv {
     static let timeZoneIdentifier = "Europe/Berlin"
@@ -30,7 +39,7 @@ enum ParityHarness {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(value)
         guard let string = String(data: data, encoding: .utf8) else {
-            throw TestError("canonical encoding produced non-UTF8 data")
+            throw ParityError("canonical encoding produced non-UTF8 data")
         }
         return string + "\n"
     }
