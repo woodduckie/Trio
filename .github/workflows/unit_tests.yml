@@ -128,8 +128,11 @@ jobs:
             .build
             BuildTools/.build
           key: ${{ runner.os }}-trio-dd-${{ github.sha }}
+          # Second prefix catches caches written under the old key, so renaming it
+          # costs a warm build once rather than a cold one on every branch.
           restore-keys: |
             ${{ runner.os }}-trio-dd-
+            ${{ runner.os }}-trio-
 
       # Boots while the build runs, so the test step does not pay for it. Never fatal.
       - name: Start simulator
@@ -163,7 +166,10 @@ jobs:
           fi
         shell: bash
 
+      # Only dev writes the cache: PRs restore from it, so they skip the ~77s upload
+      # and stop evicting each other out of the repo's cache budget.
       - name: Save cache
+        if: github.ref == 'refs/heads/dev'
         uses: actions/cache/save@v5
         with:
           path: |
