@@ -166,10 +166,10 @@ jobs:
           fi
         shell: bash
 
-      # Only dev writes the cache: PRs restore from it, so they skip the ~77s upload
-      # and stop evicting each other out of the repo's cache budget.
+      # Every run writes the cache. Restricting this to dev cost more than it saved:
+      # a PR's later runs then restore an ever-staler cache, and the build went 480s
+      # -> 716s across two pushes against a ~45s upload.
       - name: Save cache
-        if: github.ref == 'refs/heads/dev'
         uses: actions/cache/save@v5
         with:
           path: |
