@@ -161,19 +161,19 @@ jobs:
             -quiet \
             COMPILATION_CACHE_ENABLE_CACHING=YES \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             | tee xcodebuild-build.log || _rc=$?
           echo "Build for testing|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
           exit ${_rc:-0}
-        # If the App Group container turns out to be needed at test runtime,
-        # the entitlement is applied at the signing step — swap the three
-        # CODE_SIGN* lines above for ad-hoc simulator signing (no credentials):
-        #   CODE_SIGN_IDENTITY="-"  CODE_SIGN_STYLE=Manual
-        #   DEVELOPMENT_TEAM=""  PROVISIONING_PROFILE_SPECIFIER=""
-        # And to isolate the Xcode 26 compilation cache, drop
-        # COMPILATION_CACHE_ENABLE_CACHING=YES.
+        # Ad-hoc simulator signing (CODE_SIGN_IDENTITY="-"): applies the app's
+        # entitlements — notably the App Group — WITHOUT any Apple Developer
+        # credentials, so the test host can resolve its shared container at
+        # launch. Manual style + empty team/profile keeps xcodebuild from
+        # reaching for a real certificate. To isolate the Xcode 26 compilation
+        # cache if a build ever misbehaves, drop COMPILATION_CACHE_ENABLE_CACHING=YES.
 
       # Surface the failing lines directly in the job log on any build failure,
       # so exit-65 diagnosis doesn't require digging. Covers compiler errors,
@@ -199,7 +199,11 @@ jobs:
 
       - name: Check for uncommitted changes
         run: |
-          CHANGES=$(git status --porcelain)
+          CHANGES=$(git status --porcelain -- . \
+            ':(exclude).timings' \
+            ':(exclude).submodule-status' \
+            ':(exclude)xcodebuild-build.log' \
+            ':(exclude)xcodebuild.log')
           if [ -n "$CHANGES" ]; then
             echo "Uncommitted changes detected:"
             echo "$CHANGES"
@@ -231,6 +235,7 @@ jobs:
           key: ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.sha }}
 
       - name: Run tests
+        id: run_tests
         run: |
           set -o pipefail
           _start=$(date +%s)
@@ -243,28 +248,50 @@ jobs:
           echo "Run tests|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
           exit ${_rc:-0}
 
+      # Report the ACTUAL xcodebuild test outcome, not a grep guess. A crash or
+      # a test-host launch failure exits 65 without a "Failing tests:" section,
+      # so the old heuristic reported a false pass. On failure, surface the
+      # named failures AND crash/launch/entitlement indicators.
       - name: Annotate test results
         if: always()
         run: |
-          if [ -f xcodebuild.log ]; then
-            if grep -q "Failing tests:" xcodebuild.log; then
-              echo "::error title=Unit Tests Failed::Some tests failed"
-              echo "## ❌ Some tests failed:" >> $GITHUB_STEP_SUMMARY
-              grep -A 20 "Failing tests:" xcodebuild.log | \
-                grep -E '^\s+[A-Za-z0-9]+\..+\(\)' | \
-                sed 's/^/  - /' >> $GITHUB_STEP_SUMMARY
-              echo "::group::Failed Test List"
-              grep -A 20 "Failing tests:" xcodebuild.log | \
-                grep -E '^\s+[A-Za-z0-9]+\..+\(\)' | \
-                sed 's/^/  - /'
-              echo "::endgroup::"
-            else
+          case "${{ steps.run_tests.outcome }}" in
+            success)
               echo "::notice title=Unit Tests Passed::✅ All tests passed"
               echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "::warning::Test log (xcodebuild.log) not found"
-          fi
+              ;;
+            skipped)
+              echo "::warning title=Unit Tests Skipped::Test phase did not run (build failed earlier)"
+              echo "⚠️ Tests did not run — the build failed before this step." >> $GITHUB_STEP_SUMMARY
+              ;;
+            *)
+              echo "::error title=Unit Tests Failed::xcodebuild test phase failed (exit 65)"
+              {
+                echo "## ❌ Test phase failed"
+                echo ""
+                echo "**Named test failures (if any):**"
+                echo '```'
+                grep -A 20 "Failing tests:" xcodebuild.log 2>/dev/null \
+                  | grep -E '^[[:space:]]+[A-Za-z0-9]+\..+\(\)' | sed 's/^/  - /' \
+                  || echo "(none listed — likely a crash or launch failure, see indicators below)"
+                echo '```'
+                echo ""
+                echo "**Crash / launch / entitlement indicators:**"
+                echo '```'
+                grep -nE "Testing failed:|\*\* TEST.*FAILED|Fatal error|[Cc]rash|Restarting after unexpected exit|could not be launched|Application Group|containerURL|entitlement|Sandbox" xcodebuild.log 2>/dev/null | tail -n 40 \
+                  || echo "(no indicators matched — download the xcodebuild-test-log artifact)"
+                echo '```'
+              } >> $GITHUB_STEP_SUMMARY
+              ;;
+          esac
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-test-log
+          path: xcodebuild.log
+          if-no-files-found: ignore
 
       # Per-phase wall-clock + cache signals, written to the run SUMMARY panel
       # (not the step log). On a failed build only the phases that ran appear.
