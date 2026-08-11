@@ -231,6 +231,7 @@ jobs:
         shell: bash
 
       # Keep the cache small so it doesn't thrash the 10 GB per-repo limit.
+      # Do NOT touch CompilationCache.noindex — that's the cross-commit cache.
       - name: Trim DerivedData before caching
         if: always()
         run: |
@@ -258,7 +259,7 @@ jobs:
             -workspace Trio.xcworkspace \
             -scheme "Trio Tests" \
             -destination "$DESTINATION" \
-            -parallel-testing-enabled YES \
+            -parallel-testing-enabled NO \
             2>&1 | tee xcodebuild.log || _rc=$?
           echo "Run tests|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
           exit ${_rc:-0}
