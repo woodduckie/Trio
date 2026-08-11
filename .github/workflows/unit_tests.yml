@@ -115,20 +115,23 @@ jobs:
       - name: Capture submodule state for cache key
         run: git submodule status --recursive | awk '{print $1, $2}' > .submodule-status
 
-      # DerivedData holds build products, the SwiftPM checkouts, AND the Xcode
-      # 26 compilation cache (CompilationCache.noindex at its root). The first
-      # restore-key matches DerivedData last built with the SAME dependency
-      # versions, so compiled deps come back warm and only changed app files
-      # recompile. Saved per-SHA so the newest is always fresh.
-      - name: Restore DerivedData
-        id: dd-restore
+      - name: Cache SwiftPM checkouts
+        uses: actions/cache@v5
+        with:
+          path: ~/spm-checkouts
+          key: ${{ runner.os }}-spm-checkouts-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-checkouts-
+
+      - name: Restore compilation cache
+        id: cas-restore
         uses: actions/cache/restore@v5
         with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.sha }}
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: ${{ runner.os }}-cas-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-
-            ${{ runner.os }}-dd-
+            ${{ runner.os }}-cas-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-
+            ${{ runner.os }}-cas-
 
       # SwiftFormat is built from source by the Xcode build phase via
       # `swift run --package-path BuildTools`. Cache its build dir so that
@@ -145,9 +148,6 @@ jobs:
         run: xcrun simctl list devices available
 
       # Explicit resolve so the build can run with automatic resolution off.
-      # No-op when DerivedData restored warm; pinned versions only, no network
-      # churn. Checkouts land in the default location inside DerivedData
-      # (out of SRCROOT), not in the working tree.
       - name: Resolve Swift packages
         run: |
           set -o pipefail
@@ -155,6 +155,7 @@ jobs:
           xcodebuild -resolvePackageDependencies \
             -workspace Trio.xcworkspace \
             -scheme "Trio Tests" \
+            -clonedSourcePackagesDirPath "$HOME/spm-checkouts" \
             -onlyUsePackageVersionsFromResolvedFile || _rc=$?
           echo "Resolve packages|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
           exit ${_rc:-0}
@@ -167,6 +168,7 @@ jobs:
             -workspace Trio.xcworkspace \
             -scheme "Trio Tests" \
             -destination "$DESTINATION" \
+            -clonedSourcePackagesDirPath "$HOME/spm-checkouts" \
             -onlyUsePackageVersionsFromResolvedFile \
             -disableAutomaticPackageResolution \
             -skipPackagePluginValidation \
@@ -230,25 +232,14 @@ jobs:
           fi
         shell: bash
 
-      # Keep the cache small so it doesn't thrash the 10 GB per-repo limit.
-      # Do NOT touch CompilationCache.noindex — that's the cross-commit cache.
-      - name: Trim DerivedData before caching
+      # Save the compilation cache (small, ~1.4 GB).
+      # Gate with `&& github.event_name == 'push'` like the checkouts cache.
+      - name: Save compilation cache
         if: always()
-        run: |
-          DD="$HOME/Library/Developer/Xcode/DerivedData"
-          find "$DD" -type d -name 'Logs' -prune -exec rm -rf {} + 2>/dev/null || true
-          find "$DD" -name '*.xcactivitylog' -delete 2>/dev/null || true
-          find "$DD" -type d -name 'Index.noindex' -prune -exec rm -rf {} + 2>/dev/null || true
-
-      - name: Save DerivedData
-        # dev pushes only: refreshes the shared 5.4 GB baseline (and lets the
-        # compilation cache accumulate). PRs restore it warm but never re-upload
-        # it, so a PR run pays no save cost and PRs don't evict each other.
-        if: always() && github.event_name == 'push' && steps.dd-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.sha }}
+          path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
+          key: ${{ runner.os }}-cas-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.run_id }}
 
       - name: Run tests
         id: run_tests
@@ -330,9 +321,13 @@ jobs:
             echo ""
             echo "### Cache signals"
             echo ""
-            echo "- DerivedData exact cache hit: \`${{ steps.dd-restore.outputs.cache-hit }}\` (false is expected — warm-start comes from restore-keys)"
-            dd_size=$(du -sh "$DD" 2>/dev/null | cut -f1 || echo "n/a")
+            echo "- CAS restore-key hit: \`${{ steps.cas-restore.outputs.cache-matched-key != '' }}\` (exact hit is expected false — warm-start comes from restore-keys)"
             cc_size=$(du -sh "$DD/CompilationCache.noindex" 2>/dev/null | cut -f1 || echo "absent")
-            echo "- DerivedData size (post-trim): \`${dd_size}\`"
-            echo "- CompilationCache.noindex size: \`${cc_size}\` (grows across runs as the Xcode 26 cache warms up)"
+            sp_size=$(du -sh "$HOME/spm-checkouts" 2>/dev/null | cut -f1 || echo "absent")
+            build_size=$(du -sh "$DD"/*/Build 2>/dev/null | tail -n1 | cut -f1 || echo "n/a")
+            echo "- CompilationCache.noindex size (CACHED): \`${cc_size}\`"
+            echo "- SwiftPM checkouts size (CACHED): \`${sp_size}\`"
+            echo "- Build products size (NOT cached — rebuilt each run): \`${build_size}\`"
+            echo ""
+            echo "> Compare **Build for testing** and total wall-clock against the previous 5.4 GB-cache run. If the build phase held roughly steady and total dropped, #3 wins."
           } >> "$GITHUB_STEP_SUMMARY"
