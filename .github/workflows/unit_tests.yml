@@ -44,9 +44,9 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: AlgorithmPackage/.build
-          key: ${{ runner.os }}-spm-algorithm-v2-${{ hashFiles('AlgorithmPackage/Package.swift', 'Trio/Sources/**/*.swift', 'TrioTests/OpenAPSSwiftTests/**/*.swift') }}
+          key: ${{ runner.os }}-spm-algorithm-${{ hashFiles('AlgorithmPackage/Package.swift', 'AlgorithmPackage/Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-spm-algorithm-v2-
+            ${{ runner.os }}-spm-algorithm-
 
       - name: Show Swift version
         run: swift --version
@@ -55,11 +55,13 @@ jobs:
         run: time swift test --package-path AlgorithmPackage
 
       - name: Save cache
-        if: always() && steps.spm-cache-restore.outputs.cache-hit != 'true'
+        # PRs read the dev cache but never write it — avoids churning the
+        # 10 GB per-repo cache limit. dev pushes refresh the shared baseline.
+        if: always() && github.event_name == 'push' && steps.spm-cache-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: AlgorithmPackage/.build
-          key: ${{ runner.os }}-spm-algorithm-v2-${{ hashFiles('AlgorithmPackage/Package.swift', 'Trio/Sources/**/*.swift', 'TrioTests/OpenAPSSwiftTests/**/*.swift') }}
+          key: ${{ runner.os }}-spm-algorithm-${{ hashFiles('AlgorithmPackage/Package.swift', 'AlgorithmPackage/Package.resolved') }}
 
       - name: Annotate algorithm package results
         if: always()
@@ -128,6 +130,17 @@ jobs:
             ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-
             ${{ runner.os }}-dd-
 
+      # SwiftFormat is built from source by the Xcode build phase via
+      # `swift run --package-path BuildTools`. Cache its build dir so that
+      # ~1 min recompile only happens when BuildTools' manifest changes.
+      - name: Cache BuildTools (SwiftFormat)
+        uses: actions/cache@v5
+        with:
+          path: BuildTools/.build
+          key: ${{ runner.os }}-buildtools-${{ hashFiles('BuildTools/Package.swift', 'BuildTools/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-buildtools-
+
       - name: List available simulators
         run: xcrun simctl list devices available
 
@@ -190,7 +203,7 @@ jobs:
           fi
 
       - name: Upload build log
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-build-log
@@ -228,7 +241,10 @@ jobs:
           find "$DD" -type d -name 'Index.noindex' -prune -exec rm -rf {} + 2>/dev/null || true
 
       - name: Save DerivedData
-        if: always() && steps.dd-restore.outputs.cache-hit != 'true'
+        # dev pushes only: refreshes the shared 5.4 GB baseline (and lets the
+        # compilation cache accumulate). PRs restore it warm but never re-upload
+        # it, so a PR run pays no save cost and PRs don't evict each other.
+        if: always() && github.event_name == 'push' && steps.dd-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: ~/Library/Developer/Xcode/DerivedData
@@ -286,7 +302,7 @@ jobs:
           esac
 
       - name: Upload test log
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-test-log
