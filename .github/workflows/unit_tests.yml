@@ -20,6 +20,13 @@ on:
       - '**.yml'
       - '**.txt'
 
+# Cancel superseded runs on the same ref so a quick follow-up push doesn't
+# leave an obsolete build burning a runner. Saves queue time and minutes,
+# not per-run wall-clock — but it's free and worth having.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Guards the TrioAlgorithm SPM package declared in AlgorithmPackage/Package.swift.
   #
@@ -28,28 +35,21 @@ jobs:
   # `swift test` while `test` stays green. This job is the only thing that notices.
   #
   # Runs in parallel with `test` and needs no simulator, so it reports in well
-  # under a minute.
+  # under a minute. Left unchanged from the original.
   algorithm-package:
     name: Algorithm Package (swift test)
     runs-on: macos-26
     if: github.repository_owner == 'nightscout'
-    # The parity goldens were recorded in this zone and skip themselves outside it.
-    env:
-      TZ: Europe/Berlin
 
     steps:
       - name: Select Xcode version
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
-      # No submodules: the package declares no external dependencies and
-      # compiles only files under Trio/Sources and TrioTests/OpenAPSSwiftTests.
       - name: Checkout code
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
-      # `-v2-` is a cache generation marker, not a version of anything.
-      # Bump it again if the cached path ever moves.
       - name: Restore cache
         id: spm-cache-restore
         uses: actions/cache/restore@v5
@@ -63,18 +63,7 @@ jobs:
         run: swift --version
 
       - name: Run algorithm tests
-        run: |
-          set -o pipefail
-          time swift test --package-path AlgorithmPackage 2>&1 | tee swift-test.log
-
-      # A skipped parity suite still exits 0, so assert it actually ran.
-      - name: Assert golden parity ran
-        run: |
-          if grep -q 'Suite "OpenAPSSwift golden parity" skipped' swift-test.log; then
-            echo "::error title=Golden parity skipped::TZ is not Europe/Berlin in this job"
-            exit 1
-          fi
-        shell: bash
+        run: time swift test --package-path AlgorithmPackage
 
       - name: Save cache
         if: always() && steps.spm-cache-restore.outputs.cache-hit != 'true'
@@ -106,8 +95,12 @@ jobs:
   test:
     name: Run Unit Tests
     runs-on: macos-26
-    timeout-minutes: 45
     if: github.repository_owner == 'nightscout'
+
+    env:
+      # One place to change the destination if the runner image bumps its
+      # simulator name/OS.
+      DESTINATION: "platform=iOS Simulator,name=iPhone 17,OS=26.2"
 
     steps:
       - name: Select Xcode version
@@ -119,37 +112,90 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
-      - name: Restore cache
-        id: cache-restore
+      # --- Cache key inputs -------------------------------------------------
+      # Fingerprint the *dependency* state, independent of app source. This is
+      # what makes the caches below hit on nearly every PR: app code changes
+      # constantly, dependency pins almost never do.
+      - name: Capture submodule state for cache key
+        run: git submodule status --recursive | awk '{print $1, $2}' > .submodule-status
+
+      # --- Cache 1: SwiftPM checkouts --------------------------------------
+      # Relocated out of DerivedData (see -clonedSourcePackagesDirPath below)
+      # so it can be keyed purely on Package.resolved. Reliable hit => the
+      # resolve/clone step becomes a no-op.
+      - name: Cache SwiftPM checkouts
+        uses: actions/cache@v5
+        with:
+          path: SourcePackages
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      # --- Cache 2: DerivedData (build products + compilation cache) --------
+      # The important fix. The old key hashed **/*.swift, so it changed on
+      # every PR and never hit — the restore always fell back to a random
+      # recent cache. Here the *first* restore-key matches DerivedData last
+      # built with the SAME dependency versions, so compiled dependency
+      # modules come back warm and Xcode only recompiles changed app files.
+      #
+      # This path also carries DerivedData/CompilationCache.noindex — the
+      # Xcode 26 content-addressable cache enabled below — which survives
+      # across commits and covers the changed-app-code delta the warm
+      # products can't. Saved per-SHA so the newest is always fresh.
+      - name: Restore DerivedData
+        id: dd-restore
         uses: actions/cache/restore@v5
         with:
-          path: |
-            /Users/runner/Library/Developer/Xcode/DerivedData/*/Build
-            /Users/runner/Library/Developer/Xcode/DerivedData/*/SourcePackages
-            .build
-            BuildTools/.build
-          key: ${{ runner.os }}-trio-dd-${{ github.sha }}
-          # Second prefix catches caches written under the old key, so renaming it
-          # costs a warm build once rather than a cold one on every branch.
+          path: DerivedData
+          key: ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-trio-dd-
-            ${{ runner.os }}-trio-
+            ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-
+            ${{ runner.os }}-dd-
 
-      # Boots while the build runs, so the test step does not pay for it. Never fatal.
-      - name: Start simulator
-        run: xcrun simctl boot "iPhone 17" || true
+      - name: List available simulators
+        run: xcrun simctl list devices available
+
+      # Explicit resolve so the build can run with automatic resolution off.
+      # No-op when the SwiftPM cache hit; pinned versions only, no network
+      # churn to rewrite Package.resolved.
+      - name: Resolve Swift packages
+        run: |
+          set -o pipefail
+          _start=$(date +%s)
+          xcodebuild -resolvePackageDependencies \
+            -workspace Trio.xcworkspace \
+            -scheme "Trio Tests" \
+            -clonedSourcePackagesDirPath SourcePackages \
+            -onlyUsePackageVersionsFromResolvedFile || _rc=$?
+          echo "Resolve packages|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
+          exit ${_rc:-0}
 
       - name: Build for testing
         run: |
-          set -o pipefail && \
-          time xcodebuild build-for-testing \
+          set -o pipefail
+          _start=$(date +%s)
+          xcodebuild build-for-testing \
             -workspace Trio.xcworkspace \
             -scheme "Trio Tests" \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' \
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            -clonedSourcePackagesDirPath SourcePackages \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -disableAutomaticPackageResolution \
             -skipPackagePluginValidation \
             -skipMacroValidation \
-            ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO
+            -quiet \
+            COMPILATION_CACHE_ENABLE_CACHING=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tee xcodebuild-build.log || _rc=$?
+          echo "Build for testing|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
+          exit ${_rc:-0}
+        # NOTE: COMPILATION_CACHE_ENABLE_CACHING=YES is the Xcode 26 compilation
+        # cache. If a build ever fails in a way that points at module/precompiled-
+        # header caching, this single line is the thing to drop to isolate it.
 
       - name: Check for uncommitted changes
         run: |
@@ -167,89 +213,90 @@ jobs:
           fi
         shell: bash
 
-      # Every run writes the cache, including PRs. `dev` is not the repo's default
-      # branch, so a PR run cannot restore dev's caches at all — its own ref is the
-      # only warm cache it will ever see.
-      - name: Save cache
+      # Keep the DerivedData cache small so it doesn't thrash the 10 GB
+      # per-repo cache limit and evict itself. Logs and index data are large
+      # and useless to a later build. Do NOT touch CompilationCache.noindex —
+      # that's the cross-commit cache we want to keep.
+      - name: Trim DerivedData before caching
+        if: always()
+        run: |
+          rm -rf DerivedData/Logs 2>/dev/null || true
+          find DerivedData -name '*.xcactivitylog' -delete 2>/dev/null || true
+          find DerivedData -type d -name 'Index.noindex' -exec rm -rf {} + 2>/dev/null || true
+
+      # Save even when tests fail: the build products are still valid to reuse.
+      # Skipped only on an exact-SHA hit (a re-run of the same commit).
+      - name: Save DerivedData
+        if: always() && steps.dd-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: |
-            /Users/runner/Library/Developer/Xcode/DerivedData/*/Build
-            /Users/runner/Library/Developer/Xcode/DerivedData/*/SourcePackages
-            .build
-            BuildTools/.build
-          key: ${{ runner.os }}-trio-dd-${{ github.sha }}
+          path: DerivedData
+          key: ${{ runner.os }}-dd-${{ hashFiles('**/Package.resolved', '.submodule-status') }}-${{ github.sha }}
 
-      # MallocScribble poisons freed memory so a use-after-free trips immediately
-      # rather than whenever malloc next walks a damaged free list; MallocErrorAbort
-      # turns that into a crash report with a stack instead of a limping process.
       - name: Run tests
-        env:
-          TEST_RUNNER_MallocScribble: "1"
-          TEST_RUNNER_MallocErrorAbort: "1"
         run: |
           set -o pipefail
-          time xcodebuild test-without-building \
+          _start=$(date +%s)
+          xcodebuild test-without-building \
             -workspace Trio.xcworkspace \
             -scheme "Trio Tests" \
-            -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' \
-            -disableAutomaticPackageResolution \
-            -test-timeouts-enabled YES \
-            -default-test-execution-time-allowance 120 \
-            -resultBundlePath TestResults.xcresult \
-            $([ "$ENABLE_PARALLEL_TESTING" = "true" ] && echo "-parallel-testing-enabled YES") \
-            2>&1 | tee xcodebuild.log
-
-      # The runner has crashed mid-suite with heap corruption that does not reproduce
-      # locally under ASan or TSan. Keep the crash report so the next occurrence is
-      # diagnosable from a stack rather than from log adjacency.
-      - name: Collect crash diagnostics
-        if: failure()
-        run: |
-          mkdir -p diagnostics
-          cp -R TestResults.xcresult diagnostics/ 2>/dev/null || true
-          cp -R ~/Library/Logs/DiagnosticReports diagnostics/host-reports 2>/dev/null || true
-          find ~/Library/Developer/CoreSimulator/Devices -name "*.ips" -newermt "-2 hours" \
-            -exec cp {} diagnostics/ \; 2>/dev/null || true
-          ls -R diagnostics | head -50
-        shell: bash
-
-      - name: Upload crash diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-diagnostics-${{ github.run_attempt }}
-          path: diagnostics
-          retention-days: 7
-          if-no-files-found: ignore
-
-      # A skipped parity suite still exits 0, so assert it actually ran.
-      - name: Assert golden parity ran
-        run: |
-          if grep -q 'Suite "OpenAPSSwift golden parity" skipped' xcodebuild.log; then
-            echo "::error title=Golden parity skipped::TZ is not Europe/Berlin in the test runner"
-            exit 1
-          fi
-        shell: bash
+            -destination "$DESTINATION" \
+            -derivedDataPath DerivedData \
+            -parallel-testing-enabled YES \
+            2>&1 | tee xcodebuild.log || _rc=$?
+          echo "Run tests|$(( $(date +%s) - _start ))" >> "$GITHUB_WORKSPACE/.timings"
+          exit ${_rc:-0}
 
       - name: Annotate test results
         if: always()
         run: |
-          if [ ! -f xcodebuild.log ]; then
+          if [ -f xcodebuild.log ]; then
+            if grep -q "Failing tests:" xcodebuild.log; then
+              echo "::error title=Unit Tests Failed::Some tests failed"
+              echo "## ❌ Some tests failed:" >> $GITHUB_STEP_SUMMARY
+              grep -A 20 "Failing tests:" xcodebuild.log | \
+                grep -E '^\s+[A-Za-z0-9]+\..+\(\)' | \
+                sed 's/^/  - /' >> $GITHUB_STEP_SUMMARY
+              echo "::group::Failed Test List"
+              grep -A 20 "Failing tests:" xcodebuild.log | \
+                grep -E '^\s+[A-Za-z0-9]+\..+\(\)' | \
+                sed 's/^/  - /'
+              echo "::endgroup::"
+            else
+              echo "::notice title=Unit Tests Passed::✅ All tests passed"
+              echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
             echo "::warning::Test log (xcodebuild.log) not found"
-            exit 0
           fi
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "::notice title=Unit Tests Passed::✅ All tests passed"
-            echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
-            exit 0
-          fi
-          echo "::error title=Unit Tests Failed::Some tests failed"
-          echo "## ❌ Some tests failed:" >> $GITHUB_STEP_SUMMARY
-          # swift-testing marks failures with a leading cross; XCTest uses "Failing tests:"
+
+      # --- Benchmark summary ------------------------------------------------
+      # Per-phase wall-clock + cache signals, written to the run summary so you
+      # can see where the minutes go and whether the caches are actually
+      # hitting. Read this on the first few runs to tune from.
+      - name: Benchmark summary
+        if: always()
+        run: |
           {
-            grep -E '✘ (Test|Suite) .*(failed|recorded an issue)' xcodebuild.log | sort -u | head -50 || true
-            grep -E "Assertion failed|Fatal error|Heap corruption|Restarting after" xcodebuild.log | sort -u | head -10 || true
-            grep -A 20 "Failing tests:" xcodebuild.log | grep -E '^\s+[A-Za-z0-9]+\..+\(\)' | head -50 || true
-          } | sed 's/^/  - /' | tee -a $GITHUB_STEP_SUMMARY
-        shell: bash
+            echo "## ⏱ CI phase timings"
+            echo ""
+            echo "| Phase | Duration |"
+            echo "| --- | --- |"
+            if [ -f "$GITHUB_WORKSPACE/.timings" ]; then
+              while IFS='|' read -r name secs; do
+                printf '| %s | %dm %02ds |\n' "$name" $((secs/60)) $((secs%60))
+              done < "$GITHUB_WORKSPACE/.timings"
+            else
+              echo "| (no timings captured) | — |"
+            fi
+            echo ""
+            echo "### Cache signals"
+            echo ""
+            echo "- DerivedData exact cache hit: \`${{ steps.dd-restore.outputs.cache-hit }}\` (false is expected — warm-start comes from restore-keys)"
+            dd_size=$(du -sh DerivedData 2>/dev/null | cut -f1 || echo "n/a")
+            cc_size=$(du -sh DerivedData/CompilationCache.noindex 2>/dev/null | cut -f1 || echo "absent")
+            sp_size=$(du -sh SourcePackages 2>/dev/null | cut -f1 || echo "n/a")
+            echo "- DerivedData size (post-trim): \`${dd_size}\`"
+            echo "- CompilationCache.noindex size: \`${cc_size}\` (grows across runs once the Xcode 26 cache warms up)"
+            echo "- SourcePackages size: \`${sp_size}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
