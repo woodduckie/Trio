@@ -69,13 +69,13 @@ import SwiftUI
     var message: String {
         if branch == Self.developmentBranchName {
             return String(
-                localized: "This is the development version of Trio, built from the dev branch.\n\nIt may contain changes that have not been fully tested, which might affect how Trio calculates and delivers insulin. If you are not a tester, please do not use this branch, and switch to main.",
+                localized: "This is the development version of Trio, built from the dev branch.\n\nAny updates on this branch may contain new, lightly tested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main.",
                 comment: "Body of the warning shown on builds from the dev branch"
             )
         }
 
         return String(
-            localized: "This version of Trio was built from '\(branch)', not the released main branch.\n\nIt may contain changes that have not been fully tested, which might affect how Trio calculates and delivers insulin. If you are not a tester, please switch to main.",
+            localized: "This version of Trio was built from '\(branch)', not the released main branch.\n\nAny updates on this branch may contain new, lightly tested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main.",
             comment: "Body of the warning shown on builds from a branch other than main or dev; the placeholder is the branch name"
         )
     }
