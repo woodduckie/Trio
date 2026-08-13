@@ -31,7 +31,7 @@ import SwiftUI
     private(set) var branch = ""
 
     /// Reset with the process, so every launch warns again as Loop's does.
-    private var hasShownThisLaunch = false
+    private var hasBeenAcknowledgedThisLaunch = false
 
     // MARK: - Public
 
@@ -40,7 +40,7 @@ import SwiftUI
         #if DEV_BRANCH_WARNING_DISABLED
             return
         #else
-            guard !hasShownThisLaunch else {
+            guard !hasBeenAcknowledgedThisLaunch else {
                 return
             }
 
@@ -50,9 +50,16 @@ import SwiftUI
             }
 
             self.branch = branch
-            hasShownThisLaunch = true
             isPresented = true
         #endif
+    }
+
+    /// Marks the warning as dealt with for this launch.
+    ///
+    /// Called when the user dismisses the alert, so that a request which never reached the screen
+    /// is not counted as one the user actually saw.
+    func acknowledge() {
+        hasBeenAcknowledgedThisLaunch = true
     }
 
     /// Warning body for the branch this build came from.
@@ -92,12 +99,15 @@ extension View {
             Button(String(
                 localized: "I'm a Tester",
                 comment: "Button that dismisses the non-release build warning"
-            )) {}
+            )) {
+                alerter.acknowledge()
+            }
 
             Button(String(
                 localized: "How to Return to Main",
                 comment: "Button on the non-release build warning that opens documentation about returning to main"
             )) {
+                alerter.acknowledge()
                 UIApplication.shared.open(DevelopmentBranchAlerter.returnToReleaseURL)
             }
         } message: {
