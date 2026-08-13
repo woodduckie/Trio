@@ -355,6 +355,13 @@ extension Notification.Name {
                     presentDevelopmentBranchWarningIfNeeded()
                 }
             }
+            // A first-time user is still in onboarding when the loading screen goes away, so the
+            // warning is held back there. Raise it as the completion splash gives way to the app.
+            .onChange(of: showOnboardingCompletedSplash) { _, isShowingSplash in
+                if !isShowingSplash {
+                    presentDevelopmentBranchWarningIfNeeded()
+                }
+            }
             .developmentBranchWarning(developmentBranchAlerter)
         }
         .onChange(of: scenePhase) { _, newScenePhase in
