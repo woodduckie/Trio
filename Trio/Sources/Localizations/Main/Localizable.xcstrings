@@ -11405,6 +11405,9 @@
         }
       }
     },
+    "%lld m" : {
+
+    },
     "%lld min" : {
       "localizations" : {
         "bg" : {
@@ -20961,6 +20964,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "−"
+          }
+        }
+      }
+    },
+    "⌀ %@ · GMI %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "⌀ %1$@ · GMI %2$@"
           }
         }
       }
@@ -34161,6 +34174,9 @@
         }
       }
     },
+    "Add Treatment" : {
+
+    },
     "Add Variant" : {
       "localizations" : {
         "bg" : {
@@ -43395,6 +43411,7 @@
       }
     },
     "Also Change" : {
+      "extractionState" : "stale",
       "localizations" : {
         "bg" : {
           "stringUnit" : {
@@ -56057,6 +56074,7 @@
       }
     },
     "Axis" : {
+      "extractionState" : "stale",
       "localizations" : {
         "bg" : {
           "stringUnit" : {
@@ -77340,6 +77358,12 @@
           }
         }
       }
+    },
+    "Choose what the statistics panel on the home screen displays." : {
+
+    },
+    "Choose what the statistics panel on the home screen shows by default. Tapping the panel always opens the full statistics view.\n\nTime in Range: today's time in range percentage with a glucose distribution bar.\n\nDistribution Bar Only: just the glucose distribution bar, without the percentage.\n\nToday's Averages: today's average glucose and GMI (Glucose Management Index)." : {
+
     },
     "Choose whether or not to display one or both X- and Y-Axis grid lines." : {
       "localizations" : {
@@ -109589,6 +109613,9 @@
           }
         }
       }
+    },
+    "Distribution Bar Only" : {
+      "comment" : "Home stats panel face option"
     },
     "Do not enable this feature until you have optimized your CR (carb ratio) setting." : {
       "localizations" : {
@@ -147131,6 +147158,9 @@
         }
       }
     },
+    "Hey Trioneer, watch out!" : {
+      "comment" : "Title of the warning shown on builds that are not from the main branch"
+    },
     "Hi there!" : {
       "localizations" : {
         "bg" : {
@@ -150036,6 +150066,9 @@
         }
       }
     },
+    "Home Statistics Panel" : {
+
+    },
     "Home View Button Panel " : {
       "comment" : "UI/UX option",
       "extractionState" : "manual",
@@ -151557,6 +151590,9 @@
         }
       }
     },
+    "How to Return to Main" : {
+      "comment" : "Button on the non-release build warning that opens documentation about returning to main"
+    },
     "How Trio Manages Contact Images" : {
       "localizations" : {
         "bg" : {
@@ -152178,6 +152214,9 @@
           }
         }
       }
+    },
+    "I'm a Tester" : {
+      "comment" : "Button that dismisses the non-release build warning"
     },
     "If \"Display IOB and COB\" is also enabled, \"IOB\" and \"COB\" will be replaced with the following emojis:" : {
       "localizations" : {
@@ -163900,7 +163939,11 @@
         }
       }
     },
+    "It can handle small gaps in data and ignores sensor error values. It needs 4 readings in a row, each arriving within 12 minutes of the one before it, to work properly. Only CGM readings are smoothed—manual entries are not changed." : {
+
+    },
     "It can handle small gaps in data and ignores sensor error values. It needs at least 4 readings within 12 minutes to work properly. Only CGM readings are smoothed—manual entries are not changed." : {
+      "extractionState" : "stale",
       "localizations" : {
         "bg" : {
           "stringUnit" : {
@@ -277558,6 +277601,9 @@
         }
       }
     },
+    "This is the development version of Trio, built from the dev branch.\n\nAny updates on this branch may contain new, lightly tested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main." : {
+      "comment" : "Body of the warning shown on builds from the dev branch"
+    },
     "This is the fraction of carbs we’ll assume will absorb over 4h if we don’t yet see carb absorption." : {
       "comment" : "\"Remaining Carbs Fraction\"",
       "extractionState" : "manual",
@@ -280812,6 +280858,9 @@
         }
       }
     },
+    "This version of Trio was built from '%@', not the released main branch.\n\nAny updates on this branch may contain new, lightly tested features, and may be unsafe. If you are not a tester, please do not use this branch, and switch to main." : {
+      "comment" : "Body of the warning shown on builds from a branch other than main or dev; the placeholder is the branch name"
+    },
     "This will add your current glucose on the top right of your Trio icon as a red notification badge. Changing setting takes effect on next Glucose reading." : {
       "localizations" : {
         "bg" : {
@@ -282069,7 +282118,7 @@
       }
     },
     "Time in Range" : {
-      "comment" : "Stats banner subtitle"
+      "comment" : "Home stats panel face option\nStats banner subtitle"
     },
     "Time in Range Type" : {
       "localizations" : {
@@ -285676,6 +285725,9 @@
         }
       }
     },
+    "today" : {
+      "comment" : "Stats banner scope"
+    },
     "Today" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -285806,6 +285858,12 @@
           }
         }
       }
+    },
+    "Today's average" : {
+      "comment" : "Stats banner subtitle"
+    },
+    "Today's Averages" : {
+      "comment" : "Home stats panel face option"
     },
     "Tomorrow" : {
       "localizations" : {
