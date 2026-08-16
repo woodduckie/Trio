@@ -9,8 +9,8 @@ let cgmOptions: [CGMOption] = [
         predicate: { $0.type == .plugin && $0.displayName == "FreeStyle Libre 1 / 2 / 2+" }
     ),
     CGMOption(
-        name: "FreeStyle Libre 3 / 3+",
-        predicate: { $0.type == .plugin && $0.displayName == "FreeStyle Libre 3 / 3+" }
+        name: "FreeStyle Libre 3 / 3+ (Beta)",
+        predicate: { $0.type == .plugin && $0.displayName == "FreeStyle Libre 3 / 3+ (Beta)" }
     ),
     CGMOption(name: "Eversense", predicate: { $0.type == .plugin && $0.displayName == "Eversense" }),
     CGMOption(name: "Glucose Simulator", predicate: { $0.type == .simulator }),

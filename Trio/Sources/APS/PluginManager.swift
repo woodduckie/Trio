@@ -52,7 +52,7 @@ class BasePluginManager: Injectable, PluginManager {
         ),
         CgmPluginDescription(
             pluginIdentifier: LibreLoopCGMManager.pluginIdentifier,
-            localizedTitle: String(localized: "FreeStyle Libre 3 / 3+"),
+            localizedTitle: String(localized: "FreeStyle Libre 3 / 3+ (Beta)"),
             manager: LibreLoopCGMManager.self
         ),
         CgmPluginDescription(
