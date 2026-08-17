@@ -30,6 +30,8 @@ struct ContactPicture: View {
         if let context = UIGraphicsGetCurrentContext() {
             context.setShouldAntialias(true)
             context.setAllowsAntialiasing(true)
+            UIColor.black.setFill()
+            UIRectFill(rect)
         }
 
         let ringWidth = Double(contact.ringWidth.rawValue) / 100.0
