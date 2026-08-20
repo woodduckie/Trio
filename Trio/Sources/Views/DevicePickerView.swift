@@ -81,29 +81,41 @@ private struct DevicePickerRow<Entry: DeviceCatalogEntry>: View {
     }
 }
 
-/// Resolves device artwork: Trio's own asset, then the kit's onboarding image, then an SF Symbol.
+/// Draws a catalog entry's artwork, falling back to its category glyph.
+///
+/// Every variant renders in the same fixed tile so a list mixing kit product photos with glyphs still reads as
+/// one system.
+private enum DeviceIconLayout {
+    static let tile: CGFloat = 44
+    static let cornerRadius: CGFloat = 10
+    static let imageInset: CGFloat = 5
+    static let glyphSize: CGFloat = 19
+}
+
 private struct DeviceIconView<Entry: DeviceCatalogEntry>: View {
     let entry: Entry
 
     var body: some View {
         Group {
-            // UIImage(named:) rather than Image(_:) so a missing asset is detectable — SwiftUI renders an
-            // empty box instead of failing, which would silently defeat the fallback chain.
-            if let image = UIImage(named: entry.iconAssetName) ?? entry.onboardingImage {
+            if let image = entry.iconImage {
+                // Tint applies only to template assets (MiniMed ships one), so photo assets are unaffected
+                // and template ones harmonize with the fallback glyphs instead of rendering as a black block.
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .padding(6)
+                    .foregroundColor(.accentColor)
+                    .padding(DeviceIconLayout.imageInset)
             } else {
                 Image(systemName: entry.fallbackSymbolName)
-                    .font(.system(size: 20))
+                    .font(.system(size: DeviceIconLayout.glyphSize))
                     .foregroundColor(.accentColor)
             }
         }
-        .frame(width: 44, height: 44)
+        .frame(width: DeviceIconLayout.tile, height: DeviceIconLayout.tile)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: DeviceIconLayout.cornerRadius, style: .continuous)
                 .fill(Color(UIColor.tertiarySystemFill))
         )
+        .accessibilityHidden(true)
     }
 }

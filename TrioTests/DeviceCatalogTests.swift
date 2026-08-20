@@ -2,6 +2,7 @@ import Foundation
 import LoopKitUI
 import Testing
 @testable import Trio
+import UIKit
 
 @Suite("Device Catalog Tests") struct DeviceCatalogTests {
     // MARK: - Integrity
@@ -123,5 +124,64 @@ import Testing
             PumpOptionForOnboardingUnits.allCases.count == catalogCount,
             "A pump was added to the catalog without updating PumpOptionForOnboardingUnits"
         )
+    }
+}
+
+@Suite("Device Icon Tests") struct DeviceIconTests {
+    /// The whole point of resolving artwork from the kit bundles ourselves is that it costs no submodule
+    /// changes. The cost is that asset names and bundle identifiers live in those submodules, so a bump can
+    /// rename one and the picker would silently fall back to a glyph. These tests make that a red test.
+
+    @Test("Every declared CGM icon actually resolves") func testCGMIconsResolve() {
+        for entry in DeviceCatalog.cgms where entry.icon != .none {
+            #expect(entry.iconImage != nil, "\(entry.name): \(entry.icon) did not resolve")
+        }
+    }
+
+    @Test("Every declared pump icon actually resolves") func testPumpIconsResolve() {
+        for entry in DeviceCatalog.pumps where entry.icon != .none {
+            #expect(entry.iconImage != nil, "\(entry.name): \(entry.icon) did not resolve")
+        }
+    }
+
+    @Test("Every referenced UI framework bundle is loadable") func testUIBundlesLoad() {
+        let identifiers = (DeviceCatalog.cgms.map(\.icon) + DeviceCatalog.pumps.map(\.icon))
+            .compactMap { icon -> String? in
+                guard case let .uiBundle(identifier, _) = icon else { return nil }
+                return identifier
+            }
+        #expect(!identifiers.isEmpty, "Expected at least one *UI framework icon")
+        for identifier in Set(identifiers) {
+            #expect(Bundle(identifier: identifier) != nil, "\(identifier) is not an embedded framework")
+        }
+    }
+
+    @Test("Entries with no artwork fall back to a category glyph") func testGapsFallBack() {
+        let gaps = DeviceCatalog.cgms.filter { $0.icon == .none && $0.isSelectableInPicker }
+        #expect(!gaps.isEmpty, "Expected the known artwork gaps to still be present")
+        for entry in gaps {
+            #expect(entry.iconImage == nil)
+            #expect(!entry.fallbackSymbolName.isEmpty, "\(entry.name) has no glyph to fall back to")
+            #expect(
+                UIImage(systemName: entry.fallbackSymbolName) != nil,
+                "\(entry.fallbackSymbolName) is not a valid SF Symbol"
+            )
+        }
+    }
+
+    @Test("Known artwork gaps are exactly as documented") func testGapsAreAsDocumented() {
+        let gapNames = Set(
+            DeviceCatalog.cgms.filter { $0.icon == .none && $0.isSelectableInPicker }.map(\.name) +
+                DeviceCatalog.pumps.filter { $0.icon == .none }.map(\.name)
+        )
+        // Libre 1/2/2+: LibreTransmitterUI ships no asset catalog. Libre 3: LibreLoopUI ships only onboarding
+        // steps. G5: CGMBLEKitUI ships only "g6". xDrip4iOS and Enlite never had artwork.
+        #expect(gapNames == [
+            "FreeStyle Libre 1 / 2 / 2+",
+            "FreeStyle Libre 3 / 3+ (Beta)",
+            "Dexcom G5",
+            "xDrip4iOS",
+            "Medtronic Enlite",
+        ])
     }
 }

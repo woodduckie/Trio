@@ -72,6 +72,43 @@ enum DeviceManufacturer: CaseIterable {
     }
 }
 
+// MARK: - Icon
+
+/// Where a catalog entry's artwork comes from.
+///
+/// Trio embeds every device kit as a framework, so it can load the artwork the kits already ship without any
+/// submodule changes — Loop needs `DeviceManagerUI.pickerImage` added inside each kit only because it sees
+/// plugins as opaque bundles from the outside.
+enum DeviceIcon: Hashable {
+    /// Asset in the same framework as the device's manager, so the bundle is derived from the manager type.
+    case managerBundle(asset: String)
+
+    /// Asset in a separate `*UI` framework. Those expose no public class to anchor `Bundle(for:)`, so the
+    /// bundle identifier is spelled out; `DeviceCatalogTests` pins every one of these.
+    case uiBundle(identifier: String, asset: String)
+
+    /// Asset in Trio's own catalog.
+    case trio(asset: String)
+
+    /// No artwork available; the row falls back to its category glyph.
+    case none
+
+    func image(managerBundle: Bundle?) -> UIImage? {
+        switch self {
+        case let .managerBundle(asset):
+            guard let managerBundle else { return nil }
+            return UIImage(named: asset, in: managerBundle, compatibleWith: nil)
+        case let .uiBundle(identifier, asset):
+            guard let bundle = Bundle(identifier: identifier) else { return nil }
+            return UIImage(named: asset, in: bundle, compatibleWith: nil)
+        case let .trio(asset):
+            return UIImage(named: asset)
+        case .none:
+            return nil
+        }
+    }
+}
+
 // MARK: - Entry protocol
 
 /// Display metadata shared by CGM and pump entries so one picker view can render both.
@@ -82,17 +119,16 @@ protocol DeviceCatalogEntry: Identifiable, Hashable {
     var name: String { get }
     /// Secondary line, e.g. ["Classic", "DASH", "5"]. Empty collapses the row to one line.
     var supportedModels: [String] { get }
-    var iconAssetName: String { get }
-    /// Fallback artwork from the statically linked kit.
-    var onboardingImage: UIImage? { get }
+    /// Where this device's artwork lives.
+    var icon: DeviceIcon { get }
+    /// Resolved artwork, or nil to fall back to `fallbackSymbolName`.
+    var iconImage: UIImage? { get }
     var fallbackSymbolName: String { get }
     /// False for the CGM `.none` entry, which `listOfCGM` needs but the picker must never offer.
     var isSelectableInPicker: Bool { get }
 }
 
 extension DeviceCatalogEntry {
-    var iconAssetName: String { "device_icons/\(id)" }
-
     /// Comma-joined model list for the picker sub-line and the settings hint text.
     var supportedModelsLine: String? {
         supportedModels.isEmpty ? nil : supportedModels.joined(separator: ", ")
@@ -143,6 +179,7 @@ struct CGMCatalogEntry: DeviceCatalogEntry {
     let manufacturer: DeviceManufacturer
     private let rawName: String?
     let supportedModels: [String]
+    let icon: DeviceIcon
 
     var id: String { source.id }
     var cgmType: CGMType { source.cgmType }
@@ -159,7 +196,10 @@ struct CGMCatalogEntry: DeviceCatalogEntry {
         return source.managerType == nil ? source.cgmType.subtitle : name
     }
 
-    var onboardingImage: UIImage? { source.managerType?.onboardingImage }
+    var iconImage: UIImage? {
+        icon.image(managerBundle: source.managerType.map { Bundle(for: $0) })
+    }
+
     var fallbackSymbolName: String { "sensor.tag.radiowaves.forward" }
     var isSelectableInPicker: Bool { source.cgmType != .none }
 
@@ -167,12 +207,14 @@ struct CGMCatalogEntry: DeviceCatalogEntry {
         _ source: Source,
         manufacturer: DeviceManufacturer,
         name: String? = nil,
-        supportedModels: [String] = []
+        supportedModels: [String] = [],
+        icon: DeviceIcon = .none
     ) {
         self.source = source
         self.manufacturer = manufacturer
         rawName = name
         self.supportedModels = supportedModels
+        self.icon = icon
     }
 }
 
@@ -183,6 +225,7 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
     let manufacturer: DeviceManufacturer
     let name: String
     let supportedModels: [String]
+    let icon: DeviceIcon
 
     /// Identifiers written by older managers that this entry now handles.
     ///
@@ -193,7 +236,7 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
     let allowedInsulinTypes: [InsulinType]
 
     var id: String { manager.pluginIdentifier }
-    var onboardingImage: UIImage? { manager.onboardingImage }
+    var iconImage: UIImage? { icon.image(managerBundle: Bundle(for: manager)) }
     var fallbackSymbolName: String { "ivfluid.bag" }
     var isSelectableInPicker: Bool { true }
 
@@ -202,6 +245,7 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
         manufacturer: DeviceManufacturer,
         name: String,
         supportedModels: [String] = [],
+        icon: DeviceIcon = .none,
         legacyIdentifierPrefixes: [String] = [],
         allowedInsulinTypes: [InsulinType] = DeviceCatalog.defaultAllowedInsulinTypes
     ) {
@@ -209,6 +253,7 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
         self.manufacturer = manufacturer
         self.name = name
         self.supportedModels = supportedModels
+        self.icon = icon
         self.legacyIdentifierPrefixes = legacyIdentifierPrefixes
         self.allowedInsulinTypes = allowedInsulinTypes
     }
@@ -227,6 +272,7 @@ extension DeviceCatalog {
         CGMCatalogEntry(.native(.none), manufacturer: .otherSources),
 
         // Both Libre names carry their variants inline, matching the titles the driver authors chose upstream.
+        // No icons: LibreTransmitterUI ships no asset catalog, and LibreLoopUI ships only onboarding steps.
         CGMCatalogEntry(
             .managed(LibreTransmitterManagerV3.self),
             manufacturer: .abbott,
@@ -242,9 +288,20 @@ extension DeviceCatalog {
 
         // Dexcom rebrands rather than versioning, so the "/" names carry the variants and a sub-line would
         // just repeat them.
+        // No G5 icon: CGMBLEKitUI ships only "g6", and reusing it would picture the wrong hardware.
         CGMCatalogEntry(.managed(G5CGMManager.self), manufacturer: .dexcom, name: "Dexcom G5"),
-        CGMCatalogEntry(.managed(G6CGMManager.self), manufacturer: .dexcom, name: "Dexcom G6 / ONE"),
-        CGMCatalogEntry(.managed(G7CGMManager.self), manufacturer: .dexcom, name: "Dexcom G7 / ONE+"),
+        CGMCatalogEntry(
+            .managed(G6CGMManager.self),
+            manufacturer: .dexcom,
+            name: "Dexcom G6 / ONE",
+            icon: .uiBundle(identifier: "com.loopkit.CGMBLEKitUI", asset: "g6")
+        ),
+        CGMCatalogEntry(
+            .managed(G7CGMManager.self),
+            manufacturer: .dexcom,
+            name: "Dexcom G7 / ONE+",
+            icon: .uiBundle(identifier: "org.loopkit.G7SensorKitUI", asset: "g7")
+        ),
 
         CGMCatalogEntry(
             .native(.enlite),
@@ -256,20 +313,26 @@ extension DeviceCatalog {
         CGMCatalogEntry(
             .managed(AccuChekCgmManager.self),
             manufacturer: .roche,
-            name: "Accu-Chek SmartGuide"
+            name: "Accu-Chek SmartGuide",
+            icon: .managerBundle(asset: "sensor")
         ),
 
         CGMCatalogEntry(
             .managed(EversenseCGMManager.self),
             manufacturer: .senseonics,
             name: "Eversense",
-            supportedModels: ["E3", "E365"]
+            supportedModels: ["E3", "E365"],
+            icon: .managerBundle(asset: "transmitter")
         ),
 
-        CGMCatalogEntry(.native(.nightscout), manufacturer: .otherSources),
+        CGMCatalogEntry(.native(.nightscout), manufacturer: .otherSources, icon: .trio(asset: "owl")),
         CGMCatalogEntry(.native(.xdrip), manufacturer: .otherSources),
 
-        CGMCatalogEntry(.native(.simulator), manufacturer: .simulator)
+        CGMCatalogEntry(
+            .native(.simulator),
+            manufacturer: .simulator,
+            icon: .uiBundle(identifier: "com.loopkit.MockKitUI", asset: "CGM Simulator")
+        )
     ]
 
     static let pumps: [PumpCatalogEntry] = [
@@ -278,30 +341,35 @@ extension DeviceCatalog {
             manufacturer: .insulet,
             name: "Omnipod",
             supportedModels: ["Classic", "DASH", "5"],
+            icon: .managerBundle(asset: "Pod"),
             legacyIdentifierPrefixes: ["Omni"]
         ),
         PumpCatalogEntry(
             MinimedPumpManager.self,
             manufacturer: .medtronic,
             name: "MiniMed",
-            supportedModels: ["x15", "x22", "x23", "x54"]
+            supportedModels: ["x15", "x22", "x23", "x54"],
+            icon: .uiBundle(identifier: "org.loopkit.MinimedKitUI", asset: "5xx Small Outline")
         ),
         PumpCatalogEntry(
             MedtrumPumpManager.self,
             manufacturer: .medtrum,
             name: "Medtrum Nano",
-            supportedModels: ["200U", "300U"]
+            supportedModels: ["200U", "300U"],
+            icon: .managerBundle(asset: "nano200")
         ),
         PumpCatalogEntry(
             DanaKitPumpManager.self,
             manufacturer: .sooil,
             name: "Dana",
-            supportedModels: ["DanaRS", "Dana-i"]
+            supportedModels: ["DanaRS", "Dana-i"],
+            icon: .managerBundle(asset: "danars")
         ),
         PumpCatalogEntry(
             MockPumpManager.self,
             manufacturer: .simulator,
-            name: String(localized: "Pump Simulator", comment: "Simulated pump in the device picker")
+            name: String(localized: "Pump Simulator", comment: "Simulated pump in the device picker"),
+            icon: .uiBundle(identifier: "com.loopkit.MockKitUI", asset: "Pump Simulator")
         )
     ]
 }
