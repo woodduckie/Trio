@@ -14,11 +14,13 @@ import LibreTransmitter
 import LibreTransmitterUI
 import LoopKit
 import LoopKitUI
+import MachO
 import MedtrumKit
 import MinimedKit
 import MinimedKitUI
 import MockKit
 import MockKitUI
+import ObjectiveC
 import OmnipodKit
 import UIKit
 
@@ -107,6 +109,13 @@ enum DeviceIcon: Hashable {
             return nil
         }
     }
+}
+
+/// Basal-rate limits a pump accepts, used to bound the onboarding basal picker.
+struct BasalRateCapability: Hashable {
+    let minimum: Decimal
+    let maximum: Decimal
+    let step: Decimal
 }
 
 // MARK: - Entry protocol
@@ -235,6 +244,13 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
 
     let allowedInsulinTypes: [InsulinType]
 
+    /// Bounds for the onboarding basal-rate picker.
+    let basalCapability: BasalRateCapability
+
+    /// Whether the pump reports a reservoir rewind. Tubed pumps do; patch pumps have nothing to rewind, so
+    /// `rewindResetsAutosens` is meaningless for them and onboarding hides the question.
+    let reportsRewindEvents: Bool
+
     var id: String { manager.pluginIdentifier }
     var iconImage: UIImage? { icon.image(managerBundle: Bundle(for: manager)) }
     var fallbackSymbolName: String { "ivfluid.bag" }
@@ -247,7 +263,9 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
         supportedModels: [String] = [],
         icon: DeviceIcon = .none,
         legacyIdentifierPrefixes: [String] = [],
-        allowedInsulinTypes: [InsulinType] = DeviceCatalog.defaultAllowedInsulinTypes
+        allowedInsulinTypes: [InsulinType] = DeviceCatalog.defaultAllowedInsulinTypes,
+        basalCapability: BasalRateCapability,
+        reportsRewindEvents: Bool
     ) {
         self.manager = manager
         self.manufacturer = manufacturer
@@ -256,6 +274,8 @@ struct PumpCatalogEntry: DeviceCatalogEntry {
         self.icon = icon
         self.legacyIdentifierPrefixes = legacyIdentifierPrefixes
         self.allowedInsulinTypes = allowedInsulinTypes
+        self.basalCapability = basalCapability
+        self.reportsRewindEvents = reportsRewindEvents
     }
 
     static func == (lhs: PumpCatalogEntry, rhs: PumpCatalogEntry) -> Bool { lhs.id == rhs.id }
@@ -342,34 +362,45 @@ extension DeviceCatalog {
             name: "Omnipod",
             supportedModels: ["Classic", "DASH", "5"],
             icon: .managerBundle(asset: "Pod"),
-            legacyIdentifierPrefixes: ["Omni"]
+            legacyIdentifierPrefixes: ["Omni"],
+            // FIXME: we need to be able to differentiate Eros here due to not allowing 0 basal rates
+            basalCapability: BasalRateCapability(minimum: 0, maximum: 30, step: 0.05),
+            reportsRewindEvents: false
         ),
         PumpCatalogEntry(
             MinimedPumpManager.self,
             manufacturer: .medtronic,
             name: "MiniMed",
             supportedModels: ["x15", "x22", "x23", "x54"],
-            icon: .uiBundle(identifier: "org.loopkit.MinimedKitUI", asset: "5xx Small Outline")
+            icon: .uiBundle(identifier: "org.loopkit.MinimedKitUI", asset: "5xx Small Outline"),
+            basalCapability: BasalRateCapability(minimum: 0, maximum: 35, step: 0.05),
+            reportsRewindEvents: true
         ),
         PumpCatalogEntry(
             MedtrumPumpManager.self,
             manufacturer: .medtrum,
             name: "Medtrum Nano",
             supportedModels: ["200U", "300U"],
-            icon: .managerBundle(asset: "nano200")
+            icon: .managerBundle(asset: "nano200"),
+            basalCapability: BasalRateCapability(minimum: 0.05, maximum: 30, step: 0.05),
+            reportsRewindEvents: false
         ),
         PumpCatalogEntry(
             DanaKitPumpManager.self,
             manufacturer: .sooil,
             name: "Dana",
             supportedModels: ["DanaRS", "Dana-i"],
-            icon: .managerBundle(asset: "danars")
+            icon: .managerBundle(asset: "danars"),
+            basalCapability: BasalRateCapability(minimum: 0, maximum: 3, step: 0.05),
+            reportsRewindEvents: true
         ),
         PumpCatalogEntry(
             MockPumpManager.self,
             manufacturer: .simulator,
             name: String(localized: "Pump Simulator", comment: "Simulated pump in the device picker"),
-            icon: .uiBundle(identifier: "com.loopkit.MockKitUI", asset: "Pump Simulator")
+            icon: .uiBundle(identifier: "com.loopkit.MockKitUI", asset: "Pump Simulator"),
+            basalCapability: BasalRateCapability(minimum: 0, maximum: 30, step: 0.05),
+            reportsRewindEvents: false
         )
     ]
 }
@@ -386,6 +417,31 @@ extension DeviceCatalog {
     /// The list backing the CGM settings screen. Includes `.none`; the picker filters it out.
     static var cgmModels: [CGMModel] {
         cgms.map(CGMModel.init)
+    }
+
+    /// Pumps offered during onboarding: real hardware only, since onboarding is configuring actual therapy.
+    static var onboardingPumps: [PumpCatalogEntry] {
+        pumps.filter { $0.manufacturer != .simulator }
+    }
+
+    /// Resolves an already-paired pump to an onboarding-eligible entry.
+    ///
+    /// Users upgrading from a pre-onboarding Trio already have an instantiated pump manager, so onboarding
+    /// preselects it. Anything not offered during onboarding — the simulator, or a driver no longer catalogued —
+    /// falls back to the default, which is what the old manager cascade did by only testing the four real pumps.
+    static func onboardingPump(forPersistedIdentifier identifier: String) -> PumpCatalogEntry {
+        guard let entry = pumpEntry(forPersistedIdentifier: identifier),
+              onboardingPumps.contains(entry)
+        else {
+            return defaultOnboardingPump
+        }
+        return entry
+    }
+
+    /// Onboarding's fallback when no pump is paired yet, and for any pump not offered during onboarding.
+    static var defaultOnboardingPump: PumpCatalogEntry {
+        // Omnipod has always been this fallback; its basal bounds are the DASH values onboarding assumed.
+        pumps.first { $0.manufacturer == .insulet } ?? pumps[0]
     }
 
     static func cgmEntry(id: String) -> CGMCatalogEntry? {

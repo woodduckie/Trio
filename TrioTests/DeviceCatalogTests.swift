@@ -116,15 +116,6 @@ import UIKit
     }
 
     // MARK: - Guards against the catalog drifting from its consumers
-
-    @Test("Onboarding pump options cover every non-simulator pump") func testOnboardingOptionsCoverCatalog() {
-        // PumpOptionForOnboardingUnits drives basal increment defaults and is maintained separately.
-        let catalogCount = DeviceCatalog.pumps.filter { $0.manufacturer != .simulator }.count
-        #expect(
-            PumpOptionForOnboardingUnits.allCases.count == catalogCount,
-            "A pump was added to the catalog without updating PumpOptionForOnboardingUnits"
-        )
-    }
 }
 
 @Suite("Device Icon Tests") struct DeviceIconTests {
@@ -181,7 +172,56 @@ import UIKit
             "FreeStyle Libre 3 / 3+ (Beta)",
             "Dexcom G5",
             "xDrip4iOS",
-            "Medtronic Enlite",
+            "Medtronic Enlite"
         ])
+    }
+}
+
+@Suite("Onboarding Pump Tests") struct OnboardingPumpTests {
+    /// These values drive therapy setup, so they are pinned against the pre-catalog behaviour they replaced.
+
+    @Test("Onboarding offers real pumps only") func testExcludesSimulator() {
+        let offered = DeviceCatalog.onboardingPumps
+        #expect(offered.count == DeviceCatalog.pumps.count - 1)
+        #expect(!offered.contains { $0.manufacturer == .simulator })
+    }
+
+    @Test("Omnipod stays the onboarding fallback") func testFallbackIsOmnipod() {
+        #expect(DeviceCatalog.defaultOnboardingPump.name == "Omnipod")
+        let capability = DeviceCatalog.defaultOnboardingPump.basalCapability
+        #expect(capability == BasalRateCapability(minimum: 0, maximum: 30, step: 0.05))
+    }
+
+    @Test("Basal bounds match the values onboarding used before the catalog") func testBasalBounds() {
+        let expected: [String: BasalRateCapability] = [
+            "Omnipod": BasalRateCapability(minimum: 0, maximum: 30, step: 0.05),
+            "MiniMed": BasalRateCapability(minimum: 0, maximum: 35, step: 0.05),
+            "Dana": BasalRateCapability(minimum: 0, maximum: 3, step: 0.05),
+            "Medtrum Nano": BasalRateCapability(minimum: 0.05, maximum: 30, step: 0.05)
+        ]
+        for (name, capability) in expected {
+            let entry = DeviceCatalog.pumps.first { $0.name == name }
+            #expect(entry?.basalCapability == capability, "\(name) basal bounds changed")
+        }
+    }
+
+    @Test("Only tubed pumps report a rewind") func testRewindReporting() {
+        // rewindResetsAutosens is only meaningful for pumps with a reservoir to rewind.
+        let expected = ["Omnipod": false, "MiniMed": true, "Dana": true, "Medtrum Nano": false]
+        for (name, reports) in expected {
+            let entry = DeviceCatalog.pumps.first { $0.name == name }
+            #expect(entry?.reportsRewindEvents == reports, "\(name) rewind behaviour changed")
+        }
+    }
+
+    @Test("An upgrading user's paired pump is preselected") func testUpgradePreselection() {
+        #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "Minimed500").name == "MiniMed")
+        #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "Dana").name == "Dana")
+        // Legacy identifiers from the retired OmniKit / OmniBLE managers.
+        #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "Omnipod-DASH").name == "Omnipod")
+        // The simulator is catalogued but never offered in onboarding, so it must fall back rather than
+        // preselecting an entry the picker has no row for.
+        #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "MockPumpManager").name == "Omnipod")
+        #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "NotAPump").name == "Omnipod")
     }
 }
