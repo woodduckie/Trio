@@ -122,6 +122,56 @@ import UIKit
     }
 
     // MARK: - Guards against the catalog drifting from its consumers
+
+    /// Drift guard. Every kit still ships the vestigial `*Plugin/Info.plist` from upstream Loop, which declares
+    /// its manager identifier. Trio never loads those bundles, but they are a reliable inventory of what is
+    /// vendored, so a kit added without a catalog entry fails here instead of silently missing from the picker.
+    ///
+    /// Runtime discovery was tried and does not work: these managers are pure Swift classes, so
+    /// `objc_copyClassNamesForImage` cannot see them, and the unscoped `objc_copyClassList` walk that sees more
+    /// aborts the process on private Foundation classes.
+    @Test("Every vendored driver is either catalogued or explicitly excluded") func testCatalogCoversVendoredDrivers() throws {
+        let declared = try Self.vendoredManagerIdentifiers()
+        #expect(!declared.pumps.isEmpty, "Found no pump plugin plists — did the repo layout change?")
+        #expect(!declared.cgms.isEmpty, "Found no CGM plugin plists — did the repo layout change?")
+
+        // Vendored but deliberately not offered in Trio.
+        let excludedCGMs: Set<String> = [
+            "DexShareClient", // Dexcom Share: no longer offered
+            "G6SensorKit" // native G6 transport, not wired up in Trio
+        ]
+
+        let missingPumps = declared.pumps.subtracting(DeviceCatalog.pumps.map(\.id))
+        #expect(missingPumps.isEmpty, "Vendored pumps absent from DeviceCatalog: \(missingPumps.sorted())")
+
+        let missingCGMs = declared.cgms
+            .subtracting(DeviceCatalog.cgmManagerEntries.map(\.id))
+            .subtracting(excludedCGMs)
+        #expect(missingCGMs.isEmpty, "Vendored CGMs absent from DeviceCatalog: \(missingCGMs.sorted())")
+    }
+
+    /// Reads `*/*Plugin/Info.plist` from the repo, located relative to this source file.
+    private static func vendoredManagerIdentifiers() throws -> (pumps: Set<String>, cgms: Set<String>) {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // TrioTests
+            .deletingLastPathComponent() // repo root
+        var pumps = Set<String>(), cgms = Set<String>()
+
+        for kit in try FileManager.default.contentsOfDirectory(atPath: repoRoot.path) {
+            let kitURL = repoRoot.appendingPathComponent(kit)
+            guard let children = try? FileManager.default.contentsOfDirectory(atPath: kitURL.path) else { continue }
+            for child in children where child.hasSuffix("Plugin") {
+                let plist = kitURL.appendingPathComponent(child).appendingPathComponent("Info.plist")
+                guard let data = try? Data(contentsOf: plist),
+                      let dict = try? PropertyListSerialization
+                      .propertyList(from: data, format: nil) as? [String: Any]
+                else { continue }
+                if let id = dict["com.loopkit.Loop.PumpManagerIdentifier"] as? String { pumps.insert(id) }
+                if let id = dict["com.loopkit.Loop.CGMManagerIdentifier"] as? String { cgms.insert(id) }
+            }
+        }
+        return (pumps, cgms)
+    }
 }
 
 @Suite("Device Icon Tests") struct DeviceIconTests {
