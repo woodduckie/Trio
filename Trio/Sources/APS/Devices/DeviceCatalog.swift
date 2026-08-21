@@ -112,10 +112,61 @@ enum DeviceIcon: Hashable {
 }
 
 /// Basal-rate limits a pump accepts, used to bound the onboarding basal picker.
+///
+/// Derived from the kit's own `onboardingSupportedBasalRates` rather than hardcoded. Each kit declares that as a
+/// static specifically so it can be read before a pump is paired, which is exactly onboarding's situation.
 struct BasalRateCapability: Hashable {
     let minimum: Decimal
     let maximum: Decimal
     let step: Decimal
+
+    init(minimum: Decimal, maximum: Decimal, step: Decimal) {
+        self.minimum = minimum
+        self.maximum = maximum
+        self.step = step
+    }
+
+    /// `supportedRates` is the kit's declared grid.
+    ///
+    /// Zero is dropped even when the pump supports it. oref rejects a schedule whose rate is 0 — see
+    /// `Basal.swift` (`lastRateIsValid`, `basalLookup`) and `ProfileError.invalidCurrentBasal` /
+    /// `.invalidMaxDailyBasal`, both "must be > 0" — so offering it would let onboarding build a profile the
+    /// algorithm then refuses.
+    init(supportedRates: [Double]) {
+        let sorted = supportedRates.filter { $0 > 0 }.sorted()
+        guard let first = sorted.first, let last = sorted.last, sorted.count > 1 else {
+            self.init(minimum: 0, maximum: 0, step: 0)
+            return
+        }
+        // Smallest gap in the grid. All four onboarding grids are uniform; DeviceCatalogTests asserts that, so a
+        // kit switching to a non-uniform onboarding grid fails loudly rather than silently coarsening the picker.
+        let smallestGap = zip(sorted, sorted.dropFirst()).map { $1 - $0 }.min() ?? 0
+        self.init(
+            minimum: Self.decimal(first),
+            maximum: Self.decimal(last),
+            step: Self.decimal(smallestGap)
+        )
+    }
+
+    /// Rounds via string to avoid binary-floating-point artefacts leaking into a user-facing picker.
+    private static func decimal(_ value: Double) -> Decimal {
+        Decimal(string: String(format: "%.4f", value)) ?? 0
+    }
+
+    /// True when the grid is evenly spaced, i.e. representable by a single picker step.
+    static func isUniform(_ supportedRates: [Double]) -> Bool {
+        let sorted = supportedRates.sorted()
+        guard sorted.count > 2 else { return true }
+        let gaps = zip(sorted, sorted.dropFirst()).map { ($1 - $0 * 1).rounded(toPlaces: 4) }
+        return Set(gaps).count == 1
+    }
+}
+
+private extension Double {
+    func rounded(toPlaces places: Int) -> Double {
+        let factor = pow(10.0, Double(places))
+        return (self * factor).rounded() / factor
+    }
 }
 
 // MARK: - Entry protocol
@@ -363,8 +414,7 @@ extension DeviceCatalog {
             supportedModels: ["Classic", "DASH", "5"],
             icon: .managerBundle(asset: "Pod"),
             legacyIdentifierPrefixes: ["Omni"],
-            // FIXME: we need to be able to differentiate Eros here due to not allowing 0 basal rates
-            basalCapability: BasalRateCapability(minimum: 0, maximum: 30, step: 0.05),
+            basalCapability: BasalRateCapability(supportedRates: OmniPumpManager.onboardingSupportedBasalRates),
             reportsRewindEvents: false
         ),
         PumpCatalogEntry(
@@ -373,7 +423,7 @@ extension DeviceCatalog {
             name: "MiniMed",
             supportedModels: ["x15", "x22", "x23", "x54"],
             icon: .uiBundle(identifier: "org.loopkit.MinimedKitUI", asset: "5xx Small Outline"),
-            basalCapability: BasalRateCapability(minimum: 0, maximum: 35, step: 0.05),
+            basalCapability: BasalRateCapability(supportedRates: MinimedPumpManager.onboardingSupportedBasalRates),
             reportsRewindEvents: true
         ),
         PumpCatalogEntry(
@@ -382,7 +432,7 @@ extension DeviceCatalog {
             name: "Medtrum Nano",
             supportedModels: ["200U", "300U"],
             icon: .managerBundle(asset: "nano200"),
-            basalCapability: BasalRateCapability(minimum: 0.05, maximum: 30, step: 0.05),
+            basalCapability: BasalRateCapability(supportedRates: MedtrumPumpManager.onboardingSupportedBasalRates),
             reportsRewindEvents: false
         ),
         PumpCatalogEntry(
@@ -391,7 +441,7 @@ extension DeviceCatalog {
             name: "Dana",
             supportedModels: ["DanaRS", "Dana-i"],
             icon: .managerBundle(asset: "danars"),
-            basalCapability: BasalRateCapability(minimum: 0, maximum: 3, step: 0.05),
+            basalCapability: BasalRateCapability(supportedRates: DanaKitPumpManager.onboardingSupportedBasalRates),
             reportsRewindEvents: true
         ),
         PumpCatalogEntry(
@@ -399,7 +449,7 @@ extension DeviceCatalog {
             manufacturer: .simulator,
             name: String(localized: "Pump Simulator", comment: "Simulated pump in the device picker"),
             icon: .uiBundle(identifier: "com.loopkit.MockKitUI", asset: "Pump Simulator"),
-            basalCapability: BasalRateCapability(minimum: 0, maximum: 30, step: 0.05),
+            basalCapability: BasalRateCapability(supportedRates: MockPumpManager.onboardingSupportedBasalRates),
             reportsRewindEvents: false
         )
     ]

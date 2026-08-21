@@ -1,5 +1,11 @@
+import DanaKit
 import Foundation
 import LoopKitUI
+import MachO
+import MedtrumKit
+import MinimedKit
+import ObjectiveC
+import OmnipodKit
 import Testing
 @testable import Trio
 import UIKit
@@ -188,29 +194,38 @@ import UIKit
 
     @Test("Omnipod stays the onboarding fallback") func testFallbackIsOmnipod() {
         #expect(DeviceCatalog.defaultOnboardingPump.name == "Omnipod")
+        // The old code fell back to the DASH bounds when nothing was selected.
+        // Now the kit's own grid, which excludes 0 for Eros compatibility.
         let capability = DeviceCatalog.defaultOnboardingPump.basalCapability
-        #expect(capability == BasalRateCapability(minimum: 0, maximum: 30, step: 0.05))
+        #expect(capability == BasalRateCapability(minimum: 0.05, maximum: 30, step: 0.05))
     }
 
-    @Test("Basal bounds match the values onboarding used before the catalog") func testBasalBounds() {
+    @Test("Basal bounds come from each kit's own declared grid") func testBasalBounds() {
+        // Derived from each kit's declared grid, with 0 dropped because oref rejects a 0 basal rate.
         let expected: [String: BasalRateCapability] = [
-            "Omnipod": BasalRateCapability(minimum: 0, maximum: 30, step: 0.05),
-            "MiniMed": BasalRateCapability(minimum: 0, maximum: 35, step: 0.05),
-            "Dana": BasalRateCapability(minimum: 0, maximum: 3, step: 0.05),
+            "Omnipod": BasalRateCapability(minimum: 0.05, maximum: 30, step: 0.05),
+            "MiniMed": BasalRateCapability(minimum: 0.05, maximum: 35, step: 0.05),
+            // Dana delivers in 0.01 steps; Trio previously offered 0.05.
+            "Dana": BasalRateCapability(minimum: 0.01, maximum: 3, step: 0.01),
             "Medtrum Nano": BasalRateCapability(minimum: 0.05, maximum: 30, step: 0.05)
         ]
         for (name, capability) in expected {
             let entry = DeviceCatalog.pumps.first { $0.name == name }
-            #expect(entry?.basalCapability == capability, "\(name) basal bounds changed")
+            #expect(entry?.basalCapability == capability, "\(name): got \(String(describing: entry?.basalCapability))")
         }
     }
 
-    @Test("Only tubed pumps report a rewind") func testRewindReporting() {
-        // rewindResetsAutosens is only meaningful for pumps with a reservoir to rewind.
-        let expected = ["Omnipod": false, "MiniMed": true, "Dana": true, "Medtrum Nano": false]
-        for (name, reports) in expected {
-            let entry = DeviceCatalog.pumps.first { $0.name == name }
-            #expect(entry?.reportsRewindEvents == reports, "\(name) rewind behaviour changed")
+    @Test("Every onboarding basal grid is evenly spaced") func testGridsAreUniform() {
+        // A single min/max/step picker can only represent a uniform grid. If a kit ever ships a banded onboarding
+        // grid (MiniMed's paired gen-23 grid is banded 0.025/0.05/0.1), this fails instead of silently coarsening.
+        let grids: [String: [Double]] = [
+            "Omnipod": OmniPumpManager.onboardingSupportedBasalRates,
+            "MiniMed": MinimedPumpManager.onboardingSupportedBasalRates,
+            "Dana": DanaKitPumpManager.onboardingSupportedBasalRates,
+            "Medtrum Nano": MedtrumPumpManager.onboardingSupportedBasalRates
+        ]
+        for (name, grid) in grids {
+            #expect(BasalRateCapability.isUniform(grid), "\(name) onboarding grid is not evenly spaced")
         }
     }
 
@@ -223,5 +238,14 @@ import UIKit
         // preselecting an entry the picker has no row for.
         #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "MockPumpManager").name == "Omnipod")
         #expect(DeviceCatalog.onboardingPump(forPersistedIdentifier: "NotAPump").name == "Omnipod")
+    }
+
+    @Test("Only tubed pumps report a rewind") func testRewindReporting() {
+        // rewindResetsAutosens is only meaningful for pumps with a reservoir to rewind.
+        let expected = ["Omnipod": false, "MiniMed": true, "Dana": true, "Medtrum Nano": false]
+        for (name, reports) in expected {
+            let entry = DeviceCatalog.pumps.first { $0.name == name }
+            #expect(entry?.reportsRewindEvents == reports, "\(name) rewind behaviour changed")
+        }
     }
 }
