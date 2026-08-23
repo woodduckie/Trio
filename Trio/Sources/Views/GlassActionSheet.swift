@@ -117,7 +117,7 @@ private struct GlassActionSheetView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.opacity(dimmed ? 0.25 : 0)
+            Color.black.opacity(dimmed ? (reduceTransparency ? 0.4 : 0.25) : 0)
                 .ignoresSafeArea()
                 .onTapGesture { dismiss(then: onCancel) }
 
@@ -190,7 +190,7 @@ private struct GlassActionSheetView: View {
 
     @ViewBuilder private var panelBackground: some View {
         if reduceTransparency {
-            panelShape.fill(Color(.secondarySystemGroupedBackground))
+            panelShape.fill(GlassChrome.opaqueFill)
         } else if #available(iOS 26.0, *) {
             panelShape.fill(.clear).glassEffect(.regular, in: panelShape)
         } else {
