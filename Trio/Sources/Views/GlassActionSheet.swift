@@ -13,9 +13,11 @@ struct GlassSheetAction: Identifiable {
         self.handler = handler
     }
 
-    /// Verbatim title, e.g. device or preset names that are not localization keys.
-    init(_ title: String, role: ButtonRole? = nil, handler: @escaping () -> Void = {}) {
-        label = Text(title)
+    /// Titles that must not be looked up: dynamic names, or strings already
+    /// resolved via `String(localized:)`. Deliberately labelled `verbatim:` so a
+    /// plain literal can never bind here and silently skip localization.
+    init(verbatim title: String, role: ButtonRole? = nil, handler: @escaping () -> Void = {}) {
+        label = Text(verbatim: title)
         self.role = role
         self.handler = handler
     }

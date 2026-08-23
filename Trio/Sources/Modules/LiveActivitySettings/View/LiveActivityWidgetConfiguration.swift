@@ -135,7 +135,7 @@ struct LiveActivityWidgetConfiguration: BaseView {
             "Add Widget",
             isPresented: $showAddItemDialog,
             actions: LiveActivityItem.allCases.filter { !selectedItems.contains($0) }.map { item in
-                GlassSheetAction(item.displayName) {
+                GlassSheetAction(verbatim: item.displayName) {
                     if let index = buttonIndexToUpdate {
                         addItem(item, at: index)
                     }

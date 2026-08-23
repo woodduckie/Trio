@@ -531,7 +531,7 @@ extension Treatments {
                         isPresented: $showConfirmDialogForBolusing,
                         actions: [
                             GlassSheetAction(
-                                bolusWarning.warningMessage
+                                verbatim: bolusWarning.warningMessage
                                     .isEmpty ? String(localized: "Enact Bolus") :
                                     String(localized: "Ignore Warning and Enact Bolus"),
                                 role: bolusWarning.warningMessage.isEmpty ? nil : .destructive
