@@ -1,5 +1,6 @@
 import Foundation
 import SwiftDate
+import System
 
 final class SimpleLogReporter: IssueReporter {
     private let fileManager = FileManager.default
@@ -111,16 +112,16 @@ extension SimpleLogReporter {
 }
 
 private extension Data {
+    /// `O_APPEND` + a single `write(2)`: seek-then-write loses lines when another writer in the
+    /// process appends to the same file.
     func append(fileURL: URL) throws {
-        if let fileHandle = FileHandle(forWritingAtPath: fileURL.path) {
-            defer {
-                fileHandle.closeFile()
-            }
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(self)
-        } else {
-            try write(to: fileURL, options: .atomic)
-        }
+        let descriptor = try FileDescriptor.open(
+            FilePath(fileURL.path),
+            .writeOnly,
+            options: [.append, .create],
+            permissions: [.ownerReadWrite, .groupRead, .otherRead]
+        )
+        try descriptor.closeAfter { _ = try descriptor.writeAll(self) }
     }
 }
 
