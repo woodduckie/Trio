@@ -112,8 +112,6 @@ extension SimpleLogReporter {
 }
 
 private extension Data {
-    /// `O_APPEND` + a single `write(2)`: seek-then-write loses lines when another writer in the
-    /// process appends to the same file.
     func append(fileURL: URL) throws {
         let descriptor = try FileDescriptor.open(
             FilePath(fileURL.path),
